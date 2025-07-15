@@ -1,0 +1,21 @@
+{
+  "name": "sawdust",
+  "tree": {
+    "$className": "DataModel",
+    "ReplicatedStorage": {
+      "$className": "ReplicatedStorage",
+      "Packages": {
+        "$path": "Packages"
+      },
+      "Sawdust": {
+        "$path": "src/ReplicatedStorage/Sawdust"
+      }
+    },
+    "ServerScriptService": {
+      "$className": "ServerScriptService",
+      "sawdustTests": {
+        "$path": "tests"
+      }
+    }
+  }
+}
