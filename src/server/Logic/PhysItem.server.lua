@@ -30,19 +30,36 @@ local gameChannel = networking.getChannel('game')
 --]] Functions
 --]] Script
 local physItemCache = caching.findCache('physItems')
+local physItemDrags = caching.findCache('physItems.dragging')
 
+--> Handle PhysItem Events
 gameChannel.physItem:handle(function(req, res)
+    local caller: Player = players:GetPlayerByUserId(req.caller)
+    local character = caller.Character
+    local humanoid = character:FindFirstChildOfClass('Humanoid')
+    local rootPart = humanoid.RootPart
+
     local headerControllers = {
-        ['verify'] = function()
-            local itemId = unpack(req.data)
-            local cacheItem = physItemCache:getValue(itemId) :: physItem.PhysicalItem
+        ['grab'] = function()
+            --> Sanity checks
+            local itemUuid = unpack(req.data)
+            local foundItem = physItemCache:getValue(itemUuid) :: physItem.PhysicalItem
+            if not foundItem then
+                warn(`[{script.Name}] Player ({caller.Name}.{caller.UserId}) attempted to pickup invalid item (UUID: {itemUuid:sub(1,8)}...)`)
+                res.setHeaders('rejected')
+                res.send(); return end
 
-            if not cacheItem then
-                local caller = players:GetPlayerByUserId(req.caller)
-                warn(`[{script.Name}] Player ({caller.Name}.{caller.UserId}) attempted to verify an invalid item! (uuid: {itemId:sub(1, 8)}...)`)
-                return false end
+            local dist = (rootPart.Position-Vector3.new(unpack(foundItem:getTransform().position))).Magnitude
+            if dist<15 then
+                warn(`[{script.Name}] Player ({caller.Name}.{caller.UserId}) attempted to pickup item outside of range! (UUID: {itemUuid:sub(1,8)}...)`)
+                res.setHeaders('rejected')
+                res.send(); return end
 
-            return cacheItem.__itemId
+            
+        end,
+
+        ['dragUpdate'] = function()
+            
         end
     }
 
@@ -50,8 +67,34 @@ gameChannel.physItem:handle(function(req, res)
     headerControllers[req.headers]()
 end)
 
-players.PlayerAdded:Connect(function(player)
-    local item = physItem.new('cube')
-    task.wait(2)
-    item:putItem({1, 3, -3}, {0, 0, 0})
-end)
+--> Register Environment
+for _, prop: Instance in pairs(workspace.Terrain.InteractableProps:GetChildren()) do
+    local itemId = prop:GetAttribute('itemId')
+    local propItem = physItem.new(itemId)
+
+    local tposition, trotation = {}, {}
+
+    local rootPosition = prop:IsA('Model') and prop:GetPivot() or prop.CFrame
+    local position,  rotation  = prop
+
+end
+
+--> Replicate Environment
+local function replicateEnv(player: Player)
+    for _, physItem: physItem.PhysicalItem in pairs(physItemCache:getContents()) do
+        gameChannel.physItem:with()
+            :broadcastTo{player}
+            :headers('create')
+            :data{physItem.__itemId, physItem.__itemId}
+            :fire()
+        gameChannel.physItem:with()
+            :broadcastGlobally()
+            :headers('put')
+            :data{physItem.__itemUuid, }
+            :fire()
+    end
+end
+
+players.PlayerAdded:Connect(replicateEnv)
+for _, player: Player in pairs(players:GetPlayers()) do
+    replicateEnv(player) end

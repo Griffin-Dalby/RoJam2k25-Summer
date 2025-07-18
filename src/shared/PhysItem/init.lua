@@ -46,19 +46,28 @@ type self = {
     __itemAsset: {},
     __itemModel: Model,
 
+    __transform: {
+        position: {[number]: number},
+        rotation: {[number]: number}?
+    },
+
     grabbed: boolean,
     grabUpdater: {}
 }
 export type PhysicalItem = typeof(setmetatable({} :: self, physItem))
 
-function physItem.new(itemId: string) : PhysicalItem
+function physItem.new(itemId: string, itemUuid: string) : PhysicalItem
 	--> Server behavior
     if isServer then
-        local itemUuid = httpsService:GenerateGUID(false)
+        itemUuid = httpsService:GenerateGUID(false)
 
         local self = setmetatable({
             __itemId = itemId,
             __itemUuid = itemUuid,
+
+            __transform = {
+                position = {0, 0, 0}
+            },
 
             grabbed = false,
         } :: self, physItem)
@@ -67,7 +76,7 @@ function physItem.new(itemId: string) : PhysicalItem
         gameChannel.physItem:with()
             :broadcastGlobally()
             :headers('create')
-            :data{itemUuid}
+            :data{itemId, itemUuid}
             :fire()
 
         return self
@@ -76,30 +85,6 @@ function physItem.new(itemId: string) : PhysicalItem
     --> Create & verify info
     local self = setmetatable({} :: self, physItem)
 
-	local itemUuid = itemId
-	itemId = nil
-	
-    local issue = nil
-    gameChannel.physItem:with()
-        :headers('verify')
-        :data{itemUuid}
-		:invoke()
-			:andThen(function(req)
-                if not req then return end
-
-				itemId = req.data.itemId end)
-            :catch(function(err)
-                issue = err or '<no issue provided>' end)
-	
-	repeat task.wait(0) until itemId~=nil or issue
-	if issue then
-        warn(`[{script.Name}] An issue occured while verifying new item! ({itemUuid:sub(1, 8)}...)`)
-        warn(`[{script.Name}] Provided error: {issue}`)
-        return end
-    if itemId == false then
-        warn(`[{script.Name}] Server rejected verification for new item! ({itemUuid:sub(1, 8)}...)`)
-        return end
-	
 	local itemAsset = itemCDN:getAsset(itemId)
 	assert(itemAsset, `Item with ID {itemId} not found in CDN.`)
 
@@ -108,6 +93,11 @@ function physItem.new(itemId: string) : PhysicalItem
     self.__itemUuid = itemUuid
     self.__itemAsset = itemAsset
     self.__itemModel = itemAsset.style.model:Clone()
+
+    self.__transform = {
+        position = {0, 0, 0},
+        rotation = {0, 0, 0}
+    }
 
     --> Set up item model
     self.__itemModel:AddTag('physItem')
@@ -122,6 +112,11 @@ function physItem.new(itemId: string) : PhysicalItem
 end
 
 function physItem:putItem(position: {[number]: number}, rotation: {[number]: number})
+    self.__transform = {
+        ['position'] = position,
+        ['rotation'] = rotation,
+    }
+    
     if isServer then
         --> Tell clients to put this item @ transform
         local call = gameChannel.physItem:with()
@@ -131,6 +126,10 @@ function physItem:putItem(position: {[number]: number}, rotation: {[number]: num
             :fire()
 
         return true end
+
+    --> Reparent
+    if self.__itemModel.Parent~=workspace.Objects then
+        self.__itemModel.Parent=workspace.Objects end
     
     --> Put this item @ transform
     if self.grabbed and self.grabbed == players.LocalPlayer then
@@ -149,8 +148,7 @@ function physItem:putItem(position: {[number]: number}, rotation: {[number]: num
     )
 end
 
-function physItem:grab()
-    
-end
+function physItem:getTransform() : {position: {}, rotation: {}}
+    return self.__transform end
 
 return physItem
