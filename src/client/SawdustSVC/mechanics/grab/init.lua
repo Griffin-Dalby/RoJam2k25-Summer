@@ -19,6 +19,7 @@ local players = game:GetService('Players')
 --]] Modules
 local sawdust = require(replicatedStorage.Sawdust)
 local networking = sawdust.core.networking
+local caching = sawdust.core.cache
 local builder = sawdust.builder
 local cdn = sawdust.core.cdn
 
@@ -38,15 +39,19 @@ local keybinds = {
 local player = players.LocalPlayer
 local camera = workspace.CurrentCamera
 
---> CDN Providers
+--> CDN providers
 local itemProvider = cdn.getProvider('item')
 
 --> Networking channels
 local gameChannel = networking.getChannel('game')
 
+--> Caches
+local physItems = caching.findCache('physItems')
+
 --]] Variables
 local availableItems = {}
 local targetedItem = nil
+local targetedPItem = nil
 
 --]] Functions
 --]] Service
@@ -153,53 +158,69 @@ return builder.new('grab')
         end)
 
         --[[ INPUTS (PC/CONSOLE) ]]--
-        local function drop()
+        local inputDebounce = false
+
+        local function drop(external: boolean)
             if not self.grabbing then return end
 
-             --> UI
+            --> Check in w/ server
+            inputDebounce = true
+            local success, errorCaught = false, false
+            gameChannel.physItem:with()
+                :headers('drop')
+                :data{
+                    Vector3.new(unpack(targetedPItem:getTransform().position)),
+                    targetedPItem:getVelocity()}
+                :invoke()
+                    :andThen(function(req)
+                        if req[1]==false then
+                            errorCaught = true
+                            warn(`[{script.Name}] Server rejected drop item request!`)
+                            return 
+                        end
+                        
+                        success = true
+                    end)
+                    :catch(function(err)
+                        errorCaught = true
+
+                        warn(`[{script.Name}] Server rejected drop item request!`)
+                        if err then
+                            warn(`[{script.Name}] An error was provided: {err}`) end
+                    end)
+
+            repeat task.wait(0) until success or errorCaught 
+            inputDebounce = false
+            if errorCaught then
+                return end
+
+            --> UI
             keybindUi.Drop.Visible = false
             keybindUi.Use.Visible = false
 
-            --> Drop item & replicate
-            local goalPart = workspace.Temp:FindFirstChild('dragGoalPart') --> Cleanup goal part
-            if goalPart then
-                goalPart:Destroy() end
-
-            local searchItem = targetedItem --> Cleanup item
-            if targetedItem:IsA('Model') then
-                searchItem = targetedItem.PrimaryPart end
-            for _, instance in pairs(searchItem:GetChildren()) do
-                if instance:IsA('AlignPosition') then
-                    instance:Destroy() end
-                if instance:IsA('AlignOrientation') then
-                    instance:Destroy() end
-                if instance:IsA('Attachment') and instance.Name == 'itemAttach' then
-                    instance:Destroy() end
+            if not external and targetedPItem then
+                targetedPItem:drop()
+                targetedPItem = nil
             end
-
-            if self.runtimes.hold then
-                self.runtimes.hold:Disconnect()
-                self.runtimes.hold=nil
-            end
-
-            targetedItem = nil
+            
             self.grabbing = false
         end
 
         local function grab()
+            if inputDebounce then return end
             if self.grabbing or not targetedItem then return end
 
             --> Check in w/ server
             local itemUuid = targetedItem:GetAttribute('itemUuid')
 
+            inputDebounce = true
             local success, errorCaught = false, false
             gameChannel.physItem:with()
                 :headers('grab')
-                :data(itemUuid)
+                :data{itemUuid} --> TODO: Include pos&velocity in this.
                 :invoke()
                     :andThen(function(req)
-                        local headers = req.headers
-                        if headers == 'rejected' then
+                        if not req[1] then
                             errorCaught = true
                             warn(`[{script.Name}] Server rejected grab item request!`)
                             return end
@@ -215,6 +236,7 @@ return builder.new('grab')
                     end)
 
             repeat task.wait(0) until success or errorCaught 
+            inputDebounce = false
             if errorCaught then
                 return end
 
@@ -228,62 +250,11 @@ return builder.new('grab')
             keybindUi.Use.Visible = true
             keybindUi.Drop.Visible = true
 
-            --> Create attachments
-            local camera = workspace.CurrentCamera
-            local goalPart = Instance.new('Part')
-            goalPart.Size = Vector3.zero
-            goalPart.Transparency = 1
-            goalPart.Anchored, goalPart.CanCollide = true, false
-            goalPart.Name = 'dragGoalPart'
+            local foundItem = physItems:getValue(itemUuid)
+            assert(foundItem, `While attempting to grab, the targeted item isn't in the cache.`)
 
-            local itemAttachment, goalAttachment = Instance.new('Attachment'), Instance.new('Attachment')
-            itemAttachment.Name, goalAttachment.Name = 'itemAttach', 'goalAttach'
-            itemAttachment.Parent, goalAttachment.Parent =
-                targetedItem:IsA('Model') and targetedItem.PrimaryPart or targetedItem, goalPart
-            
-            goalPart.Parent = workspace.Temp
-
-            local alignPos = Instance.new('AlignPosition')
-            alignPos.MaxForce = 500000
-            alignPos.MaxVelocity = 100
-            alignPos.Responsiveness = 100
-            alignPos.RigidityEnabled = false
-            alignPos.Attachment0, alignPos.Attachment1 = itemAttachment, goalAttachment
-            alignPos.Parent = itemAttachment.Parent
-
-            local alignOri = Instance.new('AlignOrientation')
-            alignOri.MaxTorque = 500000
-            alignOri.MaxAngularVelocity = 10000
-            alignOri.Responsiveness = 10000
-            alignOri.Attachment0, alignOri.Attachment1 = itemAttachment, goalAttachment
-            alignOri.Parent = itemAttachment.Parent
-
-            local timeSinceLastUpdate = 100
-            self.runtimes.hold = runService.RenderStepped:Connect(function(dT)
-                if not self.grabbing then return end
-
-                --> Update attachment
-                local camCf = camera.CFrame
-                local goalPosition = camCf.Position + camCf.LookVector*4
-                
-                goalAttachment.WorldCFrame = CFrame.lookAt(
-                    goalPosition,
-                    camCf.Position,
-                    Vector3.yAxis)
-
-                --> Check should drop
-                if (goalAttachment.WorldCFrame.Position-itemAttachment.WorldCFrame.Position).Magnitude>=itemDropDistance then
-                    drop(); return end
-
-                --> Check if should update server
-                if timeSinceLastUpdate>.2 then
-                    timeSinceLastUpdate = 0
-                    gameChannel.physItem:with()
-                        :headers('dragUpdate')
-                        :data(goalPosition)
-                        :fire()
-                end
-            end)
+            targetedPItem = foundItem
+            foundItem:grab(player, drop)
 
         end
 

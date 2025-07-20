@@ -29,11 +29,16 @@ local physItemCache = caching.findCache('physItems')
 --]] Variables
 --]] Functions
 --]] Listener
+--> Cleanup Studio Props
+local interactableProps = workspace.Terrain:FindFirstChild('InteractableProps')
+if interactableProps then
+    interactableProps:Destroy() end
+
 --> Header Handlers
 local headerHandlers = {
 	['create'] = function(itemId: string, itemUuid: string) --> Create a item on client
 		if logging then
-			print(`[{script.Name}] Created Object {itemId}[{itemUuid:sub(1,8+1+8)}...]`) end
+			print(`[{script.Name}] Created Object {itemId}[{itemUuid:sub(1,8+1+4)}...]`) end
 		
         if physItemCache:hasEntry(itemUuid) then
             warn(`[{script.Name}] Item ({itemUuid:sub(1,8)}...) already registered!`)
@@ -45,7 +50,7 @@ local headerHandlers = {
     end,
 
 	['put'] = function(itemUuid: string, position: {[number]: number}, rotation: {[number]: number})
-		if logging then
+        if logging then
 			print(`[{script.Name}] Put Object "{itemUuid:sub(1,8+1+8)}" @ transform:\nPosition: {position[1]}, {position[2]}, {position[3]}\nRotation: {rotation[1]}°, {rotation[2]}°, {rotation[3]}°`) end
 		
         if not physItemCache:hasEntry(itemUuid) then
@@ -56,9 +61,6 @@ local headerHandlers = {
         foundPhysItem:putItem(position, rotation)
     end
 }
-
---> Clear InteractiveObjects
-
 
 return function(req)
     headerHandlers[req.headers](unpack(req.data))

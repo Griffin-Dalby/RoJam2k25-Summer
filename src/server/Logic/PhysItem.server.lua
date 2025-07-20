@@ -31,9 +31,12 @@ local gameChannel = networking.getChannel('game')
 --]] Script
 local physItemCache = caching.findCache('physItems')
 local physItemDrags = caching.findCache('physItems.dragging')
+local physItemGoals = caching.findCache('physItems.drag_goals')
 
 --> Handle PhysItem Events
-gameChannel.physItem:handle(function(req, res)
+local physItemRemote, physItemReplication = gameChannel.physItem, gameChannel.physItemReplication
+
+physItemRemote:handle(function(req, res)
     local caller: Player = players:GetPlayerByUserId(req.caller)
     local character = caller.Character
     local humanoid = character:FindFirstChildOfClass('Humanoid')
@@ -41,42 +44,141 @@ gameChannel.physItem:handle(function(req, res)
 
     local headerControllers = {
         ['grab'] = function()
+            res.setHeaders('grab')
+
             --> Sanity checks
+            if physItemDrags:getValue(caller) then
+                warn(`[{script.Name}] Player ({caller.Name}.{caller.UserId}) attempted to pickup an item while they're already grabbing one!`)
+                res.setData(false)
+                res.send(); return end
+
             local itemUuid = unpack(req.data)
             local foundItem = physItemCache:getValue(itemUuid) :: physItem.PhysicalItem
             if not foundItem then
                 warn(`[{script.Name}] Player ({caller.Name}.{caller.UserId}) attempted to pickup invalid item (UUID: {itemUuid:sub(1,8)}...)`)
-                res.setHeaders('rejected')
+                res.setData(false)
                 res.send(); return end
 
             local dist = (rootPart.Position-Vector3.new(unpack(foundItem:getTransform().position))).Magnitude
-            if dist<15 then
+            if dist>50 then
                 warn(`[{script.Name}] Player ({caller.Name}.{caller.UserId}) attempted to pickup item outside of range! (UUID: {itemUuid:sub(1,8)}...)`)
-                res.setHeaders('rejected')
+                res.setData(false)
                 res.send(); return end
 
-            
+            --> Verify
+            local canGrab = foundItem:grab(caller)
+            res.setData(true)
+            res.send()
+
+            --> Replicate
+            physItemReplication:with()
+                :setFilterType('exclude')
+                :broadcastTo{caller}
+                :headers('grab')
+                :data{itemUuid, caller}
+                :fire()
+
+            return true
         end,
 
         ['dragUpdate'] = function()
+            local newPosition: Vector3 = unpack(req.data)
+            assert(newPosition, `Missing position value!`)
+
+            res.setHeaders('dragUpdate')
             
+            --> Sanity checks
+            local grabbedItemUUID = physItemDrags:getValue(caller)
+            local grabbedItem = physItemCache:getValue(grabbedItemUUID) :: physItem.PhysicalItem
+            if not grabbedItem then
+                warn(`[{script.Name}] Player ({caller.Name}.{caller.UserId}) attempted to drag an item while they aren't grabbing anything.`)
+                return end
+
+            local lastPosition = grabbedItem:getTransform().position
+            local constructed = CFrame.lookAt(newPosition, character.Head.Position)
+            local rotX, rotY, rotZ = constructed:ToEulerAnglesXYZ()
+                  rotX, rotY, rotZ = math.deg(rotX), math.deg(rotY), math.deg(rotZ)
+
+            local dist = (Vector3.new(unpack(lastPosition))-newPosition).Magnitude
+            if dist>15 then
+                warn(`[{script.Name}] Player ({caller.Name}.{caller.UserId}) attempted to drag item too far during tick!`)
+                return end
+
+            physItemGoals:setValue(caller, newPosition)
+            grabbedItem:setTransform{
+                {newPosition.X, newPosition.Y, newPosition.Z},
+                {rotX, rotY, rotZ} }
+
+            --> Replicate
+            physItemReplication:with()
+                :setFilterType('exclude')
+                :broadcastTo{caller}
+                :headers('drag')
+                :data{grabbedItemUUID, newPosition}
+                :fire()
+
+            return true
+        end,
+
+        ['drop'] = function()
+            res.setHeaders('drop')
+
+            --> Sanity checks
+            local position: Vector3, velocity: {
+                linear: Vector3,
+                angular: Vector3,
+            } = unpack(req.data)
+
+            local grabbedItemUUID = physItemDrags:getValue(caller)
+            local grabbedItem = physItemCache:getValue(grabbedItemUUID) :: physItem.PhysicalItem
+            if not grabbedItem then
+                warn(`[{script.Name}] Player ({caller.Name}.{caller.UserId}) attempted to drop an item while they aren't grabbing anything.`)
+                res.setData('sync'); res.send()
+				return end
+			
+			local canDrop = grabbedItem:drop()
+            if not canDrop then
+                res.setData(false)
+                res.send(); return end
+
+            physItemGoals:setValue(caller, nil)
+            physItemDrags:setValue(caller, nil)
+
+            res.setData(true)
+            res.send()
+
+            --> Replicate
+            physItemReplication:with()
+                :setFilterType('exclude')
+                :broadcastTo{caller}
+                :headers('drop')
+                :data{grabbedItemUUID, position, velocity}
+                :fire()
+
+            return true
         end
     }
 
     assert(headerControllers[req.headers], `No handler for header "{req.headers or '<none provided>'}".`)
-    headerControllers[req.headers]()
+    return headerControllers[req.headers]()
 end)
 
 --> Register Environment
 for _, prop: Instance in pairs(workspace.Terrain.InteractableProps:GetChildren()) do
     local itemId = prop:GetAttribute('itemId')
-    local propItem = physItem.new(itemId)
+    local propItem = physItem.new(itemId, false)
 
     local tposition, trotation = {}, {}
 
     local rootPosition = prop:IsA('Model') and prop:GetPivot() or prop.CFrame
-    local position,  rotation  = prop
+    local position = rootPosition.Position
+    local rotX, rotY, rotZ = rootPosition:ToEulerAnglesXYZ()
+          rotX, rotY, rotZ = math.deg(rotX), math.deg(rotY), math.deg(rotZ)
+    
+    tposition = {position.X, position.Y, position.Z}
+    trotation = {rotX, rotY, rotZ}
 
+    propItem:setTransform{tposition, trotation}
 end
 
 --> Replicate Environment
@@ -85,16 +187,20 @@ local function replicateEnv(player: Player)
         gameChannel.physItem:with()
             :broadcastTo{player}
             :headers('create')
-            :data{physItem.__itemId, physItem.__itemId}
+            :data{physItem.__itemId, physItem.__itemUuid}
             :fire()
         gameChannel.physItem:with()
             :broadcastGlobally()
             :headers('put')
-            :data{physItem.__itemUuid, }
+            :data{physItem.__itemUuid, physItem:getTransform().position, physItem:getTransform().rotation}
             :fire()
     end
 end
 
-players.PlayerAdded:Connect(replicateEnv)
+players.PlayerAdded:Connect(function(player)
+    player.CharacterAdded:Once(function()
+        replicateEnv(player)
+    end)
+end)
 for _, player: Player in pairs(players:GetPlayers()) do
     replicateEnv(player) end
