@@ -35,12 +35,13 @@ local headerHandlers = {
         foundItem:grab(caller)
     end,
 
-    ['drag'] = function(itemUuid: string, position: Vector3)
+    ['drag'] = function(itemUuid: string, position: Vector3, velocity: {})
         local foundItem = physItemCache:getValue(itemUuid) :: physItem.PhysicalItem
         assert(foundItem, `Failed to find item ({itemUuid:sub(1,8)} in physItemCache!`)
 
         --> Update
         foundItem:setTransform{{position.X, position.Y, position.Z}} --> Rotation is auto-handled
+        foundItem:setVelocity(velocity)
     end,
 
     ['drop'] = function(itemUuid: string, position: Vector3, velocity: {

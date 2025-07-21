@@ -63,7 +63,8 @@ type self = {
     },
 
     grabbed: boolean,
-    grabUpdater: {}
+    grabUpdater: {},
+    lastDragUpdate: number,
 }
 export type PhysicalItem = typeof(setmetatable({} :: self, physItem))
 
@@ -151,7 +152,6 @@ function physItem:drop(position: Vector3?, velocity: {linear: Vector3?, angular:
     if self.__itemModel:IsA('Model') then
         self.__itemModel:PivotTo(cf)
         targetPart = self.__itemModel.PrimaryPart
-        print(self.__itemModel:GetPivot())
     elseif self.__itemModel:IsA('BasePart') then
         self.__itemModel.CFrame = cf
         targetPart = self.__itemModel
@@ -191,18 +191,18 @@ function physItem:grab(grabbingPlayer: Player, callback: (external: true) -> nil
     goalPart.Parent = workspace.Temp
 
     local alignPos = Instance.new('AlignPosition')
-    alignPos.MaxForce = 500000
-    alignPos.MaxVelocity = 1000
-    alignPos.Responsiveness = 1000
-    alignPos.RigidityEnabled = false
+    alignPos.MaxForce = math.huge
+    alignPos.MaxVelocity = 400
+    alignPos.Responsiveness = 300
+    alignPos.RigidityEnabled = true
     alignPos.Attachment0, alignPos.Attachment1 = itemAttachment, goalAttachment
     alignPos.Parent = itemAttachment.Parent
     alignPos.Visible = true
 
     local alignOri = Instance.new('AlignOrientation')
-    alignOri.MaxTorque = 500000
-    alignOri.MaxAngularVelocity = 10000
-    alignOri.Responsiveness = 10000
+    alignOri.MaxTorque = math.huge
+    alignOri.MaxAngularVelocity = 300
+    alignOri.Responsiveness = 200
     alignOri.Attachment0, alignOri.Attachment1 = itemAttachment, goalAttachment
     alignOri.Parent = itemAttachment.Parent
 
@@ -220,12 +220,16 @@ function physItem:grab(grabbingPlayer: Player, callback: (external: true) -> nil
     local timeSinceLastUpdate = 100
 
     local interpPos = nil
+    self.lastDragUpdate = tick()
     self.grabUpdater = runService.RenderStepped:Connect(function(deltaTime)
         if not self.grabbed then return end
 
         --> Update attachment
         local basePosition = nil
         local goalPosition = nil
+
+        local firstRun = (interpPos == nil)
+        local currentPosition
         if thisPlayer==grabbingPlayer then
             basePosition = camera.CFrame
             goalPosition = basePosition.Position + basePosition.LookVector*itemHoldDistance
@@ -233,12 +237,14 @@ function physItem:grab(grabbingPlayer: Player, callback: (external: true) -> nil
             local head = grabbingPlayer.Character:FindFirstChild('Head')
             basePosition = head.CFrame
             
-            local currentPosition = Vector3.new(unpack(self:getTransform().position))
+            local origPosition = Vector3.new(unpack(self:getTransform().position))
+            currentPosition = origPosition+self:getVelocity().linear*deltaTime
             if interpPos then
                 local distance = (currentPosition-self.__itemModel:GetPivot().Position).Magnitude
                 local lerpSpeed = math.min(itemUpdateSpeed * (1 + distance * 0.5), 1)
 
-                interpPos = interpPos:Lerp(currentPosition, lerpSpeed)
+                -- interpPos = interpPos:Lerp(currentPosition, lerpSpeed)
+                interpPos = interpPos:Lerp(currentPosition, 1-math.exp(-lerpSpeed*deltaTime))
             else
                 interpPos = currentPosition
                 self:putItem({currentPosition.X, currentPosition.Y, currentPosition.Z}, {0, 0, 0})
@@ -250,10 +256,17 @@ function physItem:grab(grabbingPlayer: Player, callback: (external: true) -> nil
             goalPosition = basePosition.Position + lookPos.LookVector*itemHoldDistance
         end
         
-        goalAttachment.WorldCFrame = CFrame.lookAt(
-            goalPosition,
-            basePosition.Position,
-            Vector3.yAxis)
+        if firstRun and currentPosition then
+            goalAttachment.WorldCFrame = CFrame.lookAt(
+                currentPosition,
+                basePosition.Position,
+                Vector3.yAxis)
+        else
+            goalAttachment.WorldCFrame = CFrame.lookAt(
+                goalPosition,
+                basePosition.Position,
+                Vector3.yAxis)
+        end
 
         local itemWorldCf = itemAttachment.WorldCFrame
         local rotX, rotY, rotZ = itemAttachment.WorldCFrame:ToEulerAnglesXYZ()
@@ -272,17 +285,25 @@ function physItem:grab(grabbingPlayer: Player, callback: (external: true) -> nil
                 
             --> Check if should update server
             timeSinceLastUpdate+=deltaTime
-            if timeSinceLastUpdate>.2 then
-                local velocity = self:getVelocity()
-
+            if timeSinceLastUpdate>.033 then
                 timeSinceLastUpdate = 0
                 gameChannel.physItem:with()
                     :headers('dragUpdate')
-                    :data{goalPosition}
+                    :data{goalPosition, self:getVelocity()}
                     :fire()
             end
         end
     end)
+
+end
+
+function physItem:pickUp()
+    if isServer then
+        --> Modify inventory
+
+        return true
+    end
+
 
 end
 
@@ -291,7 +312,7 @@ function physItem:putItem(position: {[number]: number}, rotation: {[number]: num
     
     if isServer then
         --> Tell clients to put this item @ transform
-        local call = gameChannel.physItem:with()
+        gameChannel.physItem:with()
             :broadcastGlobally()
             :headers('put')
             :data{self.__itemUuid, position, rotation}
@@ -320,6 +341,38 @@ function physItem:putItem(position: {[number]: number}, rotation: {[number]: num
     )
 end
 
+function physItem:destroy(excludeTbl: {Player})
+    if isServer then
+        --> Cleanup server
+        physItems:setValue(self.__itemUuid, nil)
+        if self.grabbed then
+            physItemDrags:setValue(self.grabbed, nil)
+            self:drop()
+        end
+
+        --> Tell clients to destroy this item
+        gameChannel.physItem:with()
+            :broadcastTo(excludeTbl)
+            :setFilterType('exclude')
+            :headers('destroy')
+            :data(self.__itemUuid)
+            :fire()
+
+        return true
+    end
+
+    if self.grabUpdater then
+        self.grabUpdater:Disconnect()
+        self.grabUpdater = nil end
+    if self.grabConstraints then
+        for _, inst: Instance in pairs(self.grabConstraints) do
+            inst:Destroy() end
+        self.grabConstraints = nil end
+
+    self.__itemModel:Destroy()
+    table.clear(self)
+end
+
 --[[ TRANSFORM ]]--
 function physItem:setTransform(transform: {position: {}, rotation: {}})
     assert(transform, `Attempt to set transform without a transform table!`)
@@ -334,6 +387,14 @@ end
 
 function physItem:getTransform() : {position: {}, rotation: {}}
     return self.__transform end
+
+function physItem:setVelocity(velocity: {linear: Vector3, angular: Vector3})
+    if isServer then return end
+
+    local targPart: BasePart = self.__itemModel:IsA('Model') and self.__itemModel.PrimaryPart or self.__itemModel
+    targPart.AssemblyLinearVelocity = velocity.linear
+    targPart.AssemblyAngularVelocity = velocity.angular
+end
 
 function physItem:getVelocity() : {linear: Vector3, angular: Vector3}
     if isServer then return end

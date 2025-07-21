@@ -49,6 +49,20 @@ local headerHandlers = {
         physItemCache:setValue(itemUuid, newPhysItem)
     end,
 
+    ['destroy'] = function(itemUuid: string)
+        if logging then
+            print(`[{script.Name}] Destroying object ({itemUuid:sub(1,8+1+4)}).`) end
+
+        if not physItemCache:hasEntry(itemUuid) then
+            warn(`[{script.Name}] Item ({itemUuid:sub(1,8)}...) is not registered!`)
+            return end
+            
+        local physItem = physItemCache:getValue(itemUuid) :: physItem.PhysicalItem
+        physItem:destroy()
+
+        physItemCache:setValue(itemUuid, nil)
+    end,
+
 	['put'] = function(itemUuid: string, position: {[number]: number}, rotation: {[number]: number})
         if logging then
 			print(`[{script.Name}] Put Object "{itemUuid:sub(1,8+1+8)}" @ transform:\nPosition: {position[1]}, {position[2]}, {position[3]}\nRotation: {rotation[1]}°, {rotation[2]}°, {rotation[3]}°`) end

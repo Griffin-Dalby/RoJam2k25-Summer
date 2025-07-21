@@ -29,9 +29,10 @@ local highlighter = require(script.highlighter)
 local itemDropDistance = 10
 
 local keybinds = {
-    ['grab'] = {Enum.KeyCode.F, Enum.KeyCode.ButtonY},
-    ['drop'] = {Enum.KeyCode.Q, Enum.KeyCode.ButtonX},
-    ['use'] = {Enum.KeyCode.E, Enum.KeyCode.ButtonR2}
+    ['grab'] = {Enum.KeyCode.E, Enum.KeyCode.ButtonX},
+    ['pickUp'] = {Enum.KeyCode.F, Enum.KeyCode.ButtonY},
+    ['drop'] = {Enum.KeyCode.Q, Enum.KeyCode.ButtonB},
+    ['use'] = {Enum.UserInputType.MouseButton1, Enum.KeyCode.ButtonR2}
 }
 
 --]] Constants
@@ -112,14 +113,17 @@ return builder.new('grab')
         
             if not closest[2] then
                 keybindUi.Grab.Visible = false
+                keybindUi.PickUp.Visible = false
                 return end
                 
             if not keybindUi.Visible or targetedItem~=closest[2] then
                 local asset = itemProvider:getAsset(closest[2]:GetAttribute('itemId'))
                 keybindUi.Grab.Bind.Action.Text = `Grab {asset.style.name}`
+                keybindUi.PickUp.Bind.Action.Text = `Pick up {asset.style.name}`
 
                 keybindUi.Visible = true
                 keybindUi.Grab.Visible = true
+                keybindUi.PickUp.Visible = true
             end
             targetedItem = closest[2]
 
@@ -206,23 +210,23 @@ return builder.new('grab')
             self.grabbing = false
         end
 
-        local function grab()
+        local function interaction(action: 'grab'|'pickUp')
             if inputDebounce then return end
             if self.grabbing or not targetedItem then return end
 
             --> Check in w/ server
             local itemUuid = targetedItem:GetAttribute('itemUuid')
-
             inputDebounce = true
             local success, errorCaught = false, false
             gameChannel.physItem:with()
-                :headers('grab')
-                :data{itemUuid} --> TODO: Include pos&velocity in this.
+                :timeout(2)
+                :headers(action)
+                :data{itemUuid}
                 :invoke()
                     :andThen(function(req)
                         if not req[1] then
                             errorCaught = true
-                            warn(`[{script.Name}] Server rejected grab item request!`)
+                            warn(`[{script.Name}] Server rejected {action} request!`)
                             return end
                         
                         success = true
@@ -230,7 +234,7 @@ return builder.new('grab')
                     :catch(function(err)
                         errorCaught = true
 
-                        warn(`[{script.Name}] Server rejected grab item request!`)
+                        warn(`[{script.Name}] Server rejected {action} request!`)
                         if err then
                             warn(`[{script.Name}] An error was provided: {err}`) end
                     end)
@@ -241,27 +245,38 @@ return builder.new('grab')
                 return end
 
             --> Enable grabbing & clear highlights
-            self.grabbing = true
             for _, highlighter: highlighter.ItemHighlighter in pairs(availableItems) do
                 highlighter:discard() end; table.clear(availableItems)
             
             --> UI
+            keybindUi.PickUp.Visible = false
             keybindUi.Grab.Visible = false
-            keybindUi.Use.Visible = true
-            keybindUi.Drop.Visible = true
 
             local foundItem = physItems:getValue(itemUuid)
-            assert(foundItem, `While attempting to grab, the targeted item isn't in the cache.`)
+            assert(foundItem, `While attempting to {action}, the targeted item isn't in the cache.`)
 
             targetedPItem = foundItem
-            foundItem:grab(player, drop)
+            
+            if action=='pickUp' then
+                foundItem:destroy()
+            else
+                self.grabbing = true
 
+                foundItem:grab(player, drop)
+                keybindUi.Use.Visible = true
+                keybindUi.Drop.Visible = true
+            end
         end
 
         contextActionService:BindAction('grab', function(_, inputState)
             if inputState ~= Enum.UserInputState.End then return end
-            grab()
+            interaction('grab')
         end, false, unpack(keybinds.grab))
+
+        contextActionService:BindAction('pickUp', function(_, inputState)
+            if inputState ~= Enum.UserInputState.End then return end
+            interaction('pickUp')
+        end, false, unpack(keybinds.pickUp))
 
         contextActionService:BindAction('drop', function(_, inputState)
             if inputState ~= Enum.UserInputState.Begin then return end

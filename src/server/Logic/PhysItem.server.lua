@@ -18,6 +18,7 @@ local players = game:GetService("Players")
 local sawdust = require(replicatedStorage.Sawdust)
 local networking = sawdust.core.networking
 local caching = sawdust.core.cache
+local cdn = sawdust.core.cdn
 
 local physItem = require(replicatedStorage.Shared.PhysItem)
 
@@ -26,9 +27,14 @@ local physItem = require(replicatedStorage.Shared.PhysItem)
 --> Networking channels
 local gameChannel = networking.getChannel('game')
 
+--> CDN Providers
+local itemProvider = cdn.getProvider('item')
+
 --]] Variables
 --]] Functions
 --]] Script
+local playerCache = caching.findCache('players')
+
 local physItemCache = caching.findCache('physItems')
 local physItemDrags = caching.findCache('physItems.dragging')
 local physItemGoals = caching.findCache('physItems.drag_goals')
@@ -42,28 +48,31 @@ physItemRemote:handle(function(req, res)
     local humanoid = character:FindFirstChildOfClass('Humanoid')
     local rootPart = humanoid.RootPart
 
+    local function runSanityChecks(foundItem, itemUuid)
+        if physItemDrags:getValue(caller) then
+            warn(`[{script.Name}] Player ({caller.Name}.{caller.UserId}) attempted to pickup an item while they're already grabbing one!`)
+            res.setData(false)
+            res.send(); return end
+
+        if not foundItem then
+            warn(`[{script.Name}] Player ({caller.Name}.{caller.UserId}) attempted to pickup invalid item (UUID: {itemUuid:sub(1,8)}...)`)
+            res.setData(false)
+            res.send(); return end
+
+        local dist = (rootPart.Position-Vector3.new(unpack(foundItem:getTransform().position))).Magnitude
+        if dist>50 then
+            warn(`[{script.Name}] Player ({caller.Name}.{caller.UserId}) attempted to pickup item outside of range! (UUID: {itemUuid:sub(1,8)}...)`)
+            res.setData(false)
+            res.send(); return end
+    end
+
     local headerControllers = {
         ['grab'] = function()
             res.setHeaders('grab')
 
-            --> Sanity checks
-            if physItemDrags:getValue(caller) then
-                warn(`[{script.Name}] Player ({caller.Name}.{caller.UserId}) attempted to pickup an item while they're already grabbing one!`)
-                res.setData(false)
-                res.send(); return end
-
             local itemUuid = unpack(req.data)
             local foundItem = physItemCache:getValue(itemUuid) :: physItem.PhysicalItem
-            if not foundItem then
-                warn(`[{script.Name}] Player ({caller.Name}.{caller.UserId}) attempted to pickup invalid item (UUID: {itemUuid:sub(1,8)}...)`)
-                res.setData(false)
-                res.send(); return end
-
-            local dist = (rootPart.Position-Vector3.new(unpack(foundItem:getTransform().position))).Magnitude
-            if dist>50 then
-                warn(`[{script.Name}] Player ({caller.Name}.{caller.UserId}) attempted to pickup item outside of range! (UUID: {itemUuid:sub(1,8)}...)`)
-                res.setData(false)
-                res.send(); return end
+            runSanityChecks(foundItem, itemUuid)
 
             --> Verify
             local canGrab = foundItem:grab(caller)
@@ -81,9 +90,45 @@ physItemRemote:handle(function(req, res)
             return true
         end,
 
+        ['pickUp'] = function()
+            res.setHeaders('pickUp')
+
+            local itemUuid = unpack(req.data)
+            local foundItem = physItemCache:getValue(itemUuid) :: physItem.PhysicalItem
+            runSanityChecks(foundItem, itemUuid)
+
+            --> Verify
+            local canPickUp = foundItem:pickUp()
+            if not canPickUp then
+                res.setData(false)
+                res.send(); return end
+
+            --> Remove from phys world
+            local itemId, itemUuid = foundItem.__itemId, foundItem.__itemUuid
+            foundItem:destroy{caller}
+                
+            --> Add to inventory
+            local playerData = playerCache:findTable(caller)
+            local inventory  = playerData:getValue('inventory')
+
+            if #inventory >= 2 then --> TODO: Have dynamic when upgrades implemented
+                res.setData(false)
+                res.send(); return end
+            
+            table.insert(inventory, {itemId, itemUuid})
+
+            res.setData(true)
+            res.send()
+            return true
+        end,
+
         ['dragUpdate'] = function()
-            local newPosition: Vector3 = unpack(req.data)
+            local newPosition: Vector3, velocity: {
+                linear: Vector3,
+                angular: Vector3
+            } = unpack(req.data)
             assert(newPosition, `Missing position value!`)
+            assert(velocity, `Missing velocity value!`)
 
             res.setHeaders('dragUpdate')
             
@@ -114,7 +159,7 @@ physItemRemote:handle(function(req, res)
                 :setFilterType('exclude')
                 :broadcastTo{caller}
                 :headers('drag')
-                :data{grabbedItemUUID, newPosition}
+                :data{grabbedItemUUID, newPosition, velocity}
                 :fire()
 
             return true
