@@ -188,7 +188,7 @@ function physItem:grab(grabbingPlayer: Player, callback: (external: true) -> nil
     itemAttachment.Parent, goalAttachment.Parent =
         targetedItem:IsA('Model') and targetedItem.PrimaryPart or targetedItem, goalPart
     
-    goalPart.Parent = workspace.Temp
+    goalPart.Parent = workspace.__temp
 
     local alignPos = Instance.new('AlignPosition')
     alignPos.MaxForce = math.huge
@@ -301,10 +301,14 @@ function physItem:pickUp()
     if isServer then
         --> Modify inventory
 
+
         return true
     end
 
-
+    if self.grabbed==players.LocalPlayer then
+        
+        self:destroy()
+    end
 end
 
 function physItem:putItem(position: {[number]: number}, rotation: {[number]: number})
@@ -321,8 +325,8 @@ function physItem:putItem(position: {[number]: number}, rotation: {[number]: num
         return true end
 
     --> Reparent
-    if self.__itemModel.Parent~=workspace.Objects then
-        self.__itemModel.Parent=workspace.Objects end
+    if self.__itemModel.Parent~=workspace.__objects then
+		self.__itemModel.Parent=workspace.__objects end
     
     --> Put this item @ transform
     if self.grabbed and self.grabbed == players.LocalPlayer then

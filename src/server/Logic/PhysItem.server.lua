@@ -48,20 +48,26 @@ physItemRemote:handle(function(req, res)
     local humanoid = character:FindFirstChildOfClass('Humanoid')
     local rootPart = humanoid.RootPart
 
-    local function runSanityChecks(foundItem, itemUuid)
-        if physItemDrags:getValue(caller) then
-            warn(`[{script.Name}] Player ({caller.Name}.{caller.UserId}) attempted to pickup an item while they're already grabbing one!`)
+    local function runSanityChecks(foundItem, itemUuid, inversePickup)
+        local playerSig = `Player ({caller.Name}.{caller.UserId}) attempted to`
+
+        if not inversePickup and physItemDrags:getValue(caller) then
+            warn(`[{script.Name}] {playerSig} grab an item while they're already grabbing one!`)
+            res.setData(false)
+            res.send(); return end
+        if inversePickup and not physItemDrags:getValue(caller) then
+            warn(`[{script.Name}] {playerSig} pick up and item while they're grabbing none!`)
             res.setData(false)
             res.send(); return end
 
         if not foundItem then
-            warn(`[{script.Name}] Player ({caller.Name}.{caller.UserId}) attempted to pickup invalid item (UUID: {itemUuid:sub(1,8)}...)`)
+            warn(`[{script.Name}] {playerSig} interact w/ invalid item (UUID: {itemUuid:sub(1,8)}...)`)
             res.setData(false)
             res.send(); return end
 
         local dist = (rootPart.Position-Vector3.new(unpack(foundItem:getTransform().position))).Magnitude
-        if dist>50 then
-            warn(`[{script.Name}] Player ({caller.Name}.{caller.UserId}) attempted to pickup item outside of range! (UUID: {itemUuid:sub(1,8)}...)`)
+        if not inversePickup and dist>50 then
+            warn(`[{script.Name}] {playerSig} interact w/ item outside of range! (UUID: {itemUuid:sub(1,8)}...)`)
             res.setData(false)
             res.send(); return end
     end
@@ -76,8 +82,7 @@ physItemRemote:handle(function(req, res)
 
             --> Verify
             local canGrab = foundItem:grab(caller)
-            res.setData(true)
-            res.send()
+            res.setData(canGrab)
 
             --> Replicate
             physItemReplication:with()
@@ -86,6 +91,7 @@ physItemRemote:handle(function(req, res)
                 :headers('grab')
                 :data{itemUuid, caller}
                 :fire()
+            res.send()
 
             return true
         end,
@@ -95,7 +101,15 @@ physItemRemote:handle(function(req, res)
 
             local itemUuid = unpack(req.data)
             local foundItem = physItemCache:getValue(itemUuid) :: physItem.PhysicalItem
-            runSanityChecks(foundItem, itemUuid)
+            runSanityChecks(foundItem, itemUuid, true)
+
+            --> Player Data
+            local playerData = playerCache:findTable(caller)
+            local inventory  = playerData:getValue('inventory')
+            
+            if #inventory >= 2 then --> TODO: Have dynamic when upgrades implemented
+                res.setData(false)
+                res.send(); return end
 
             --> Verify
             local canPickUp = foundItem:pickUp()
@@ -107,14 +121,7 @@ physItemRemote:handle(function(req, res)
             local itemId, itemUuid = foundItem.__itemId, foundItem.__itemUuid
             foundItem:destroy{caller}
                 
-            --> Add to inventory
-            local playerData = playerCache:findTable(caller)
-            local inventory  = playerData:getValue('inventory')
-
-            if #inventory >= 2 then --> TODO: Have dynamic when upgrades implemented
-                res.setData(false)
-                res.send(); return end
-            
+            --> Add to inventory & finish up
             table.insert(inventory, {itemId, itemUuid})
 
             res.setData(true)

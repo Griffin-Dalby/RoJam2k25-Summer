@@ -84,7 +84,7 @@ return builder.new('grab')
 
             --> Locate closest
             local camPos = camera.CFrame.Position
-            local objects = workspace.Objects:GetChildren()
+            local objects = workspace.__objects:GetChildren()
 
             local closest = {math.huge}
             local updatedAvailableItems = {}
@@ -113,17 +113,15 @@ return builder.new('grab')
         
             if not closest[2] then
                 keybindUi.Grab.Visible = false
-                keybindUi.PickUp.Visible = false
                 return end
                 
             if not keybindUi.Visible or targetedItem~=closest[2] then
                 local asset = itemProvider:getAsset(closest[2]:GetAttribute('itemId'))
                 keybindUi.Grab.Bind.Action.Text = `Grab {asset.style.name}`
-                keybindUi.PickUp.Bind.Action.Text = `Pick up {asset.style.name}`
+                keybindUi.PickUp.Bind.Action.Text = `Pocket {asset.style.name}`
 
                 keybindUi.Visible = true
                 keybindUi.Grab.Visible = true
-                keybindUi.PickUp.Visible = true
             end
             targetedItem = closest[2]
 
@@ -212,11 +210,15 @@ return builder.new('grab')
 
         local function interaction(action: 'grab'|'pickUp')
             if inputDebounce then return end
-            if self.grabbing or not targetedItem then return end
+            if (action=='grab' and self.grabbing)
+            or (action=='pickUp' and not self.grabbing) then return end
+
+            if not targetedItem then return end
 
             --> Check in w/ server
             local itemUuid = targetedItem:GetAttribute('itemUuid')
             inputDebounce = true
+
             local success, errorCaught = false, false
             gameChannel.physItem:with()
                 :timeout(2)
@@ -224,6 +226,7 @@ return builder.new('grab')
                 :data{itemUuid}
                 :invoke()
                     :andThen(function(req)
+                        print(req)
                         if not req[1] then
                             errorCaught = true
                             warn(`[{script.Name}] Server rejected {action} request!`)
@@ -239,7 +242,7 @@ return builder.new('grab')
                             warn(`[{script.Name}] An error was provided: {err}`) end
                     end)
 
-            repeat task.wait(0) until success or errorCaught 
+            repeat task.wait(0) until success or errorCaught
             inputDebounce = false
             if errorCaught then
                 return end
@@ -249,7 +252,6 @@ return builder.new('grab')
                 highlighter:discard() end; table.clear(availableItems)
             
             --> UI
-            keybindUi.PickUp.Visible = false
             keybindUi.Grab.Visible = false
 
             local foundItem = physItems:getValue(itemUuid)
@@ -258,11 +260,17 @@ return builder.new('grab')
             targetedPItem = foundItem
             
             if action=='pickUp' then
+                keybindUi.PickUp.Visible = false
+                keybindUi.Use.Visible = false
+                keybindUi.Drop.Visible = false
+
                 foundItem:destroy()
+                self.grabbing = false
             else
                 self.grabbing = true
 
                 foundItem:grab(player, drop)
+                keybindUi.PickUp.Visible = true
                 keybindUi.Use.Visible = true
                 keybindUi.Drop.Visible = true
             end

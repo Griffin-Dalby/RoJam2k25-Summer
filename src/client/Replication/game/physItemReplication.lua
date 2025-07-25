@@ -1,6 +1,6 @@
 --[[
 
-    PhysItem Replication Listener
+    game.physItemReplication Listener
 
     Griffin Dalby
     2025.07.19

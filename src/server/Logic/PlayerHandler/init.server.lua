@@ -31,7 +31,18 @@ local playerStore = profileStore.New('PlayerStore', playerTemplate)
 local playerCache = caching.findCache('players')
 
 --]] Connections
+local charConns = {}
 local function loadPlayerData(player: Player)
+	--> Collision Groups
+	if not charConns[player] then
+		charConns[player] = player.CharacterAdded:Connect(function(character)
+			for _, part in pairs(character:GetChildren()) do
+				if not part:IsA('BasePart') then continue end
+				part.CollisionGroup = 'Player'
+			end
+		end)
+	end
+
 	local playerData = playerCache:createTable(player)
 
 	--> Session data
@@ -74,5 +85,7 @@ players.PlayerRemoving:Connect(function(player)
 	if playerCache:hasEntry(player) then
 		playerCache:setValue(player, nil) end
 
-
+	if charConns[player] then
+		charConns[player]:Disconnect()
+		charConns[player]=nil end
 end)
