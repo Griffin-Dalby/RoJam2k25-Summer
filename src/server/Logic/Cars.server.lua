@@ -102,8 +102,10 @@ runService.Heartbeat:Connect(function(deltaTime)
     for i=1,5 do
         local iSlot = carSlotCache:getValue(i) :: carSlot.CarSlot
         if not iSlot:occupied() then
-            thisSlot = iSlot
-            break end
+            thisSlot = thisSlot or iSlot
+        else
+            thisSlot = nil
+        end
     end
 
     if not thisSlot then return end --> Wait until ones available
@@ -114,6 +116,6 @@ runService.Heartbeat:Connect(function(deltaTime)
 
     print(`[{script.Name}] Spawning car!`)
     local newCar = car.new()
-    
+    thisSlot:occupySlot(newCar.uuid)
 
 end)

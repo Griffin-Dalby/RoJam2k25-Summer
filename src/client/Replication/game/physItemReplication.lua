@@ -30,14 +30,14 @@ local physItemCache = caching.findCache('physItems')
 local headerHandlers = {
     ['grab'] = function(itemUuid: string, caller: Player)
         local foundItem = physItemCache:getValue(itemUuid) :: physItem.PhysicalItem
-        assert(foundItem, `Failed to find item ({itemUuid:sub(1,8)} in physItemCache!`)
+        assert(foundItem, `Failed to find item (UUID8:{itemUuid:sub(1,8)}) in physItemCache!`)
 
         foundItem:grab(caller)
     end,
 
     ['drag'] = function(itemUuid: string, position: Vector3, velocity: {})
         local foundItem = physItemCache:getValue(itemUuid) :: physItem.PhysicalItem
-        assert(foundItem, `Failed to find item ({itemUuid:sub(1,8)} in physItemCache!`)
+        assert(foundItem, `Failed to find item (UUID8:{itemUuid:sub(1,8)}) in physItemCache!`)
 
         --> Update
         foundItem:setTransform{{position.X, position.Y, position.Z}} --> Rotation is auto-handled
@@ -48,9 +48,16 @@ local headerHandlers = {
             linear: Vector3, angular: Vector3})
 
         local foundItem = physItemCache:getValue(itemUuid) :: physItem.PhysicalItem
-        assert(foundItem, `Failed to find item ({itemUuid:sub(1,8)} in physItemCache!`)
+        assert(foundItem, `Failed to find item (UUID8:{itemUuid:sub(1,8)}) in physItemCache!`)
 
         foundItem:drop(position, velocity)
+    end,
+
+    ['wetness'] = function(itemUuid: string, wetness: number)
+        local foundItem = physItemCache:getValue(itemUuid) :: physItem.PhysicalItem
+        assert(foundItem, `Failed to find item (UUID8:{itemUuid:sub(1,8)}) in physItemCache!`)
+
+        foundItem:setWetness(wetness)
     end
 }
 

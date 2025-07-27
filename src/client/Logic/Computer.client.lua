@@ -17,6 +17,7 @@ local players = game:GetService('Players')
 --]] Settings
 --]] Constants
 local computerModel = workspace.Gameplay:WaitForChild('Computer') :: Model
+repeat task.wait(0) until computerModel.PrimaryPart
 local mainPart = computerModel.PrimaryPart
 local prompt = mainPart:WaitForChild('Prompt') :: ProximityPrompt
 

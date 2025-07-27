@@ -15,6 +15,8 @@ local runService = game:GetService('RunService')
 local https = game:GetService('HttpService')
 
 --]] Modules
+local raider = require(replicatedStorage.Shared.Raider)
+
 local vehiVisualizer = require(script.VehiVisualizer)
 
 local sawdust = require(replicatedStorage.Sawdust)
@@ -38,7 +40,6 @@ local vehicleCache = caching.findCache('vehicle')
 --]] Module
 local car = {}
 car.__index = car
-
 type self = {
     --[[ GENERAL ]]--
     uuid: string,      --> Access ID for car
@@ -68,23 +69,34 @@ function car.new(uuid: string, spawnOffset: number) : Car
         --> Choose vehicle variety
         local engine, battery, resevoir, filter
         
-
         --> Replicate & save
         gameChannel.vehicle:with()
             :broadcastGlobally()
             :headers('spawn')
-            :data(self.uuid, xOffset)
+            :data(self.uuid, xOffset, {engine, battery, resevoir, filter})
             :fire()
+
+        self.raider = raider.new(self.uuid)
 
         vehicleCache:setValue(self.uuid, self)
         return self
     end
 
     --[[ CLIENT BEHAVIOR ]]--
-    self.visualizer = vehiVisualizer.new(uuid, spawnOffset)
+    self.visualizer = vehiVisualizer.new(uuid, spawnOffset, self.raider)
 
     vehicleCache:setValue(self.uuid, self)
     return self
+end
+
+--[[ CONTROLLER ]]--
+
+--[[ car:hasRaider(raider: Raider)
+    This will add a raider to the car. ]]
+function car:hasRaider(hasRaider: raider.Raider)
+    assert(not self.__raider, `Attempt to add raider to car ({self.uuid:sub(1,8)}) with a raider already in it!`)
+    self.raider = hasRaider
+    self.visualizer:hasRaider(hasRaider)
 end
 
 return car

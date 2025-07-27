@@ -36,6 +36,7 @@ local itemUpdateSpeed = .15
 local isServer = runService:IsServer()
 
 --> CDN Providers
+local vfxCDN = cdn.getProvider('vfx')
 local itemCDN = cdn.getProvider('item')
 
 --> Networking channels
@@ -65,6 +66,8 @@ type self = {
     grabbed: boolean,
     grabUpdater: {},
     lastDragUpdate: number,
+
+    wetness: number?,
 }
 export type PhysicalItem = typeof(setmetatable({} :: self, physItem))
 
@@ -85,6 +88,8 @@ function physItem.new(itemId: string, itemUuid: string) : PhysicalItem
 
     self.grabbed = false
     self.grabUpdater = nil
+
+    self.wetness = 0
     
     --> Server behavior
     if isServer then
@@ -374,6 +379,47 @@ function physItem:destroy(excludeTbl: {Player})
 
     self.__itemModel:Destroy()
     table.clear(self)
+end
+
+function physItem:setWetness(wetness: number)
+    wetness = math.clamp(wetness, 0, 100)
+    if wetness==self.wetness then return end
+    self.wetness = wetness
+
+    if isServer then
+        gameChannel.physItemReplication:with()
+            :broadcastGlobally()
+            :headers('wetness')
+            :data(self.__itemUuid, wetness)
+            :fire()
+        
+        return
+    end
+    
+    print('set wetness', wetness)
+    --> VFX Checks
+    if wetness > 30 then --> Threshold for drip VFX (scale amount of drips w/ wetness)
+        if not self.dripEffect then
+            self.dripEffect = vfxCDN:getAsset('itemDrip'):Clone() :: ParticleEmitter
+            self.dripEffect.Parent = self.__itemModel:IsA('Model') and (self.__itemModel.PrimaryPart or self.__itemModel) or self.__itemModel
+        end
+
+        self.dripEffect.Rate = math.abs((wetness-30)/(100-30))*100
+    else --> Cleanup VFX 
+        if self.dripEffect then
+            self.dripEffect:Destroy()
+            self.dripEffect=nil
+        end
+    end
+
+    --> Set colors
+    if self.__itemModel:IsA('BasePart') then
+        
+    elseif self.__itemModel:IsA('Model') then
+
+    else
+        error(`[{script.Name}] Can't darken item colors because it's unsupported!`)
+    end
 end
 
 --[[ TRANSFORM ]]--
