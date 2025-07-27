@@ -267,6 +267,8 @@ return builder.new('grab')
 
                 foundItem:destroy()
                 self.grabbing = false
+                targetedPItem = nil
+                targetedItem = nil
             else
                 self.grabbing = true
 

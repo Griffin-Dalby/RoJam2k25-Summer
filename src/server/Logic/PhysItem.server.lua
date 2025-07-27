@@ -247,10 +247,16 @@ local function replicateEnv(player: Player)
     end
 end
 
-for _, player: Player in pairs(players:GetPlayers()) do
-    replicateEnv(player) end
-players.PlayerAdded:Connect(function(player)
-    player.CharacterAdded:Once(function()
-        replicateEnv(player)
-    end)
+local readyClients = {}
+gameChannel.ready:handle(function(req, res)
+    --> Handle readyclient table
+    local caller = players:GetPlayerByUserId(req.caller)
+    if table.find(readyClients, caller) then
+        warn(`[{script.Name}] Player ({caller.Name}.{caller.UserId}) attempted to ready a second time!`)
+        return end
+
+    table.insert(readyClients, caller)
+    
+    --> Handle ready
+    replicateEnv(caller)
 end)

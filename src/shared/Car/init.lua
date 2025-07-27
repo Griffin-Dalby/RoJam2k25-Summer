@@ -65,20 +65,25 @@ function car.new(uuid: string, spawnOffset: number) : Car
     if isServer then
         local xOffset = math.random(-spawnStrip.Size.X/2, spawnStrip.Size.X/2)
 
+        --> Choose vehicle variety
+        local engine, battery, resevoir, filter
+        
+
+        --> Replicate & save
         gameChannel.vehicle:with()
             :broadcastGlobally()
             :headers('spawn')
             :data(self.uuid, xOffset)
             :fire()
 
-        vehicleCache:setValue(uuid, self)
+        vehicleCache:setValue(self.uuid, self)
         return self
     end
 
     --[[ CLIENT BEHAVIOR ]]--
     self.visualizer = vehiVisualizer.new(uuid, spawnOffset)
 
-    vehicleCache:setValue(uuid, self)
+    vehicleCache:setValue(self.uuid, self)
     return self
 end
 

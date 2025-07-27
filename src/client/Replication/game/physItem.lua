@@ -16,6 +16,7 @@ local replicatedStorage = game:GetService('ReplicatedStorage')
 
 --]] Modules
 local sawdust = require(replicatedStorage.Sawdust)
+local networking = sawdust.core.networking
 local caching = sawdust.core.cache
 
 local physItem = require(replicatedStorage.Shared.PhysItem)
@@ -25,6 +26,9 @@ local logging = true
 
 --]] Constants
 local physItemCache = caching.findCache('physItems')
+
+--> Networking channels
+local gameChannel = networking.getChannel('game')
 
 --]] Variables
 --]] Functions
@@ -76,6 +80,8 @@ local headerHandlers = {
     end
 }
 
+--> Ready client & ready listener.
+gameChannel.ready:with():fire()
 return function(req)
     headerHandlers[req.headers](unpack(req.data))
 end

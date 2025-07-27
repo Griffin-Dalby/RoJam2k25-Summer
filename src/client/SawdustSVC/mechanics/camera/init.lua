@@ -27,8 +27,11 @@ local IArm = require(script.arm)
 --]] Settings
 --> Phys Drag
 local raycastDistance = 10
-local maxArmLength = 15
-local goalHoldDistance = 7.5
+local maxArmLength = 10
+local goalHoldDistance = 4
+
+local hingePullStrength = 2.5
+local hoodPushForce, doorPushForce = 5, 0
 
 --> Keybinds
 local keybinds = {
@@ -46,6 +49,7 @@ local camera = workspace.CurrentCamera
 
 --> CDN Providers
 local gameCDN = cdn.getProvider('game')
+local vehicleBase = gameCDN:getAsset('VehicleBase')
 
 --]] Variables
 --]] Functions
@@ -108,6 +112,8 @@ return sawdust.builder.new('camera')
         local constraintOrVelo
         local veloConnection
         
+        local lockHood = hitInstance:HasTag('Hood') and true or false
+
         if isHinge then
             hinge = topLevel:FindFirstChildWhichIsA('HingeConstraint') :: HingeConstraint
             if not hinge then warn('Couldnt find hinge') return end
@@ -115,15 +121,28 @@ return sawdust.builder.new('camera')
             local hingePart = hinge.Attachment0.Parent :: BasePart
             local doorPart  = hinge.Attachment1.Parent :: BasePart
 
+            if lockHood then
+                hinge.UpperAngle = vehicleBase.Hood.Hinge.UpperAngle
+                hinge.LowerAngle = vehicleBase.Hood.Hinge.LowerAngle
+            end
+
             constraintOrVelo = Instance.new('BodyAngularVelocity')
             constraintOrVelo.AngularVelocity = Vector3.zero
             constraintOrVelo.MaxTorque = isHorizontal
-                and Vector3.new(50000, 0, 0) or Vector3.new(0, 50000, 0)
+                and Vector3.new(0, 0, 20000) or Vector3.new(0, 75000, 0)
             constraintOrVelo.Parent = doorPart
+
+            local pushDirection = isHorizontal
+                and Vector3.new(0, 0, hoodPushForce) --> Hood push force (Z-Axis)
+                or Vector3.new(0, 0, doorPushForce)  --> Door push force (Y-Axis)
+
+            constraintOrVelo.AngularVelocity = pushDirection
+            task.wait(.1)
+            constraintOrVelo.AngularVelocity = Vector3.zero
 
             veloConnection = runService.Heartbeat:Connect(function()
                 local hingeWorldPos = hingePart.CFrame.Position
-                local hingeAxis     = hingePart.CFrame.UpVector
+                local hingeAxis     = isHorizontal and hingePart.CFrame.LookVector or hingePart.CFrame.UpVector
 
                 local toClicked = origClickedWorldPos - hingeWorldPos
                 local toGoal = goalAttachment.WorldPosition - hingeWorldPos
@@ -141,12 +160,16 @@ return sawdust.builder.new('camera')
                     angleDiff=angleDiff+2*math.pi
                 end
 
-                constraintOrVelo.AngularVelocity = Vector3.new(0, angleDiff*3, 0)
+                constraintOrVelo.AngularVelocity = Vector3.new(
+                    0,
+                    isHorizontal and 0 or angleDiff*hingePullStrength,
+                    isHorizontal and angleDiff*hingePullStrength or 0 )
             end)
         else
             constraintOrVelo = Instance.new('SpringConstraint')
             constraintOrVelo.MaxForce = math.huge
-            constraintOrVelo.FreeLength = 6
+            constraintOrVelo.Stiffness = 70
+            constraintOrVelo.FreeLength = 2
             constraintOrVelo.Damping = 6
             constraintOrVelo.Attachment0, constraintOrVelo.Attachment1
                 = hitAttachment, goalAttachment
@@ -158,24 +181,32 @@ return sawdust.builder.new('camera')
         local runtime = runService.RenderStepped:Connect(function()
             local camCf = camera.CFrame
 
-            local cast = workspace:Raycast(
-                camCf.Position,
-                camCf.LookVector*goalHoldDistance,
-                params) :: RaycastResult
+            -- local cast = workspace:Raycast(
+            --     camCf.Position,
+            --     camCf.LookVector*goalHoldDistance,
+            --     params) :: RaycastResult
             
-            local targetPosition = cast
-                and cast.Position
-                or camCf.Position+camCf.LookVector*goalHoldDistance
+            -- local targetPosition = cast
+            --     and cast.Position
+            --     or camCf.Position+camCf.LookVector*goalHoldDistance
 
-            goalPart.CFrame = CFrame.new(targetPosition)
+            goalPart.CFrame = CFrame.new(camCf.Position+camCf.LookVector*goalHoldDistance)
         end)
 
         --[[ CREATE MAID ]]--
+        self.__maid:add(veloConnection)
+        self.__maid:add(runtime)
         self.__maid:add(hitAttachment)
         self.__maid:add(constraintOrVelo)
-        self.__maid:add(veloConnection)
         self.__maid:add(goalPart)
-        self.__maid:add(runtime)
+
+        self.__maid:add(function()
+            if lockHood and hinge.CurrentAngle>math.rad(30) then
+                hinge.LimitsEnabled = true
+                hinge.UpperAngle = hinge.CurrentAngle+math.rad(5)
+                hinge.LowerAngle = hinge.CurrentAngle-math.rad(5)
+            end
+        end)
     end)
 
     :method('retractArm', function(self)
