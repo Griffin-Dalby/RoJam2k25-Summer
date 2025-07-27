@@ -19,15 +19,19 @@ local vehiVisualizer = require(script.VehiVisualizer)
 
 local sawdust = require(replicatedStorage.Sawdust)
 local networking = sawdust.core.networking
+local caching = sawdust.core.cache
 
 --]] Settings
-local spawnStrip = workspace.Gameplay.SpawnStrip :: Part
+local spawnStrip = workspace.Gameplay:WaitForChild('SpawnStrip') :: Part
 
 --]] Constants
 local isServer = runService:IsServer()
 
 --> Networking channel
 local gameChannel = networking.getChannel('game')
+
+--> Caching groups
+local vehicleCache = caching.findCache('vehicle')
 
 --]] Variables
 --]] Functions
@@ -60,8 +64,6 @@ function car.new(uuid: string, spawnOffset: number) : Car
     --[[ SERVER BEHAVIOR ]]--
     if isServer then
         local xOffset = math.random(-spawnStrip.Size.X/2, spawnStrip.Size.X/2)
-        -- local chosenPosition = spawnStrip.CFrame.Position +
-        --     Vector3.new(xOffset, 0, 0)
 
         gameChannel.vehicle:with()
             :broadcastGlobally()
@@ -69,12 +71,14 @@ function car.new(uuid: string, spawnOffset: number) : Car
             :data(self.uuid, xOffset)
             :fire()
 
+        vehicleCache:setValue(uuid, self)
         return self
     end
 
     --[[ CLIENT BEHAVIOR ]]--
-    self.visualizer = vehiVisualizer.new()
+    self.visualizer = vehiVisualizer.new(uuid, spawnOffset)
 
+    vehicleCache:setValue(uuid, self)
     return self
 end
 

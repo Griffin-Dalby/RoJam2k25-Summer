@@ -33,5 +33,4 @@ local carSlotCache = caching.findCache('carSlots')
 --> Setup slots
 for i = 1, slotCount do
     local thisSlot = carSlot.new(i)
-    carSlotCache:setValue(i, thisSlot)
 end

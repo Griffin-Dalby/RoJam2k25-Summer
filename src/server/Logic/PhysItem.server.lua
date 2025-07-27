@@ -247,10 +247,10 @@ local function replicateEnv(player: Player)
     end
 end
 
+for _, player: Player in pairs(players:GetPlayers()) do
+    replicateEnv(player) end
 players.PlayerAdded:Connect(function(player)
     player.CharacterAdded:Once(function()
         replicateEnv(player)
     end)
 end)
-for _, player: Player in pairs(players:GetPlayers()) do
-    replicateEnv(player) end

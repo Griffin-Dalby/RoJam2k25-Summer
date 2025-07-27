@@ -115,18 +115,11 @@ return sawdust.builder.new('camera')
             local hingePart = hinge.Attachment0.Parent :: BasePart
             local doorPart  = hinge.Attachment1.Parent :: BasePart
 
-            print('Found hinge:',hinge:GetFullName())
-            print('Hinge Part0 (Frame):', hingePart:GetFullName())
-            print('Hinge Part1 (door):', doorPart:GetFullName())
-            print('Hinge Actuator:', hinge.ActuatorType)
-
             constraintOrVelo = Instance.new('BodyAngularVelocity')
             constraintOrVelo.AngularVelocity = Vector3.zero
             constraintOrVelo.MaxTorque = isHorizontal
                 and Vector3.new(50000, 0, 0) or Vector3.new(0, 50000, 0)
             constraintOrVelo.Parent = doorPart
-
-            print('bAV parent:', constraintOrVelo.Parent:GetFullName())
 
             veloConnection = runService.Heartbeat:Connect(function()
                 local hingeWorldPos = hingePart.CFrame.Position
@@ -135,20 +128,11 @@ return sawdust.builder.new('camera')
                 local toClicked = origClickedWorldPos - hingeWorldPos
                 local toGoal = goalAttachment.WorldPosition - hingeWorldPos
 
-                print('toClick:', toClicked)
-                print('toGoal:', toGoal)
-
                 toClicked = toClicked-toClicked:Dot(hingeAxis)*hingeAxis
                 toGoal    = toGoal-toGoal:Dot(hingeAxis)*hingeAxis
 
-                print('toClick proj:', toClicked)
-                print('toGoal proj:', toGoal)
-
                 local currentAngle = math.atan2(toClicked.X, toClicked.Z)
                 local targetAngle = math.atan2(toGoal.X, toGoal.Z)
-
-                print('currentAngle:', currentAngle)
-                print('targetAngle:',targetAngle)
 
                 local angleDiff = targetAngle-currentAngle
                 if angleDiff>math.pi then
@@ -156,8 +140,6 @@ return sawdust.builder.new('camera')
                 elseif angleDiff<-math.pi then
                     angleDiff=angleDiff+2*math.pi
                 end
-
-                print('angleDiff:',angleDiff)
 
                 constraintOrVelo.AngularVelocity = Vector3.new(0, angleDiff*3, 0)
             end)
