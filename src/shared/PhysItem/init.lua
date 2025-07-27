@@ -192,12 +192,11 @@ function physItem:grab(grabbingPlayer: Player, callback: (external: true) -> nil
 
     local alignPos = Instance.new('AlignPosition')
     alignPos.MaxForce = math.huge
-    alignPos.MaxVelocity = 400
-    alignPos.Responsiveness = 300
+    alignPos.MaxVelocity = 200
+    alignPos.Responsiveness = 25
     alignPos.RigidityEnabled = true
     alignPos.Attachment0, alignPos.Attachment1 = itemAttachment, goalAttachment
     alignPos.Parent = itemAttachment.Parent
-    alignPos.Visible = true
 
     local alignOri = Instance.new('AlignOrientation')
     alignOri.MaxTorque = math.huge

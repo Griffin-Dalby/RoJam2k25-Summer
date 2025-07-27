@@ -5,11 +5,11 @@ registry = "test"
 [[package]]
 name = "griff/rojam2k25-summer"
 version = "0.1.0"
-dependencies = [["sawdust", "griffin-dalby/sawdust@1.2.3"]]
+dependencies = [["sawdust", "griffin-dalby/sawdust@1.2.5"]]
 
 [[package]]
 name = "griffin-dalby/sawdust"
-version = "1.2.3"
+version = "1.2.5"
 dependencies = [["testez", "roblox/testez@0.4.1"]]
 
 [[package]]

@@ -5,4 +5,4 @@ registry = "https://github.com/UpliftGames/wally-index"
 realm = "shared"
 
 [dependencies]
-sawdust = "griffin-dalby/sawdust@1.2.3"
+sawdust = "griffin-dalby/sawdust@1.2.5"

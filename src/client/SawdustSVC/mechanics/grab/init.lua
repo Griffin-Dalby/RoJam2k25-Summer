@@ -31,6 +31,7 @@ local itemDropDistance = 10
 local keybinds = {
     ['grab'] = {Enum.KeyCode.E, Enum.KeyCode.ButtonX},
     ['pickUp'] = {Enum.KeyCode.F, Enum.KeyCode.ButtonY},
+
     ['drop'] = {Enum.KeyCode.Q, Enum.KeyCode.ButtonB},
     ['use'] = {Enum.UserInputType.MouseButton1, Enum.KeyCode.ButtonR2}
 }
@@ -58,10 +59,10 @@ local targetedPItem = nil
 --]] Service
 
 return builder.new('grab')
-    :dependsOn('camera')
     :init(function(self, deps)
         --[[ CREATE FIELDS ]]--
         self.grabbing = false
+        self.physDragging = false
 
         self.grabLength = 4
     end)
@@ -197,6 +198,7 @@ return builder.new('grab')
                 return end
 
             --> UI
+            keybindUi.PickUp.Visible = false
             keybindUi.Drop.Visible = false
             keybindUi.Use.Visible = false
 
@@ -226,7 +228,6 @@ return builder.new('grab')
                 :data{itemUuid}
                 :invoke()
                     :andThen(function(req)
-                        print(req)
                         if not req[1] then
                             errorCaught = true
                             warn(`[{script.Name}] Server rejected {action} request!`)
@@ -280,7 +281,6 @@ return builder.new('grab')
             if inputState ~= Enum.UserInputState.End then return end
             interaction('grab')
         end, false, unpack(keybinds.grab))
-
         contextActionService:BindAction('pickUp', function(_, inputState)
             if inputState ~= Enum.UserInputState.End then return end
             interaction('pickUp')

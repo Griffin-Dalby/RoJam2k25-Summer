@@ -142,9 +142,7 @@ physItemRemote:handle(function(req, res)
             --> Sanity checks
             local grabbedItemUUID = physItemDrags:getValue(caller)
             local grabbedItem = physItemCache:getValue(grabbedItemUUID) :: physItem.PhysicalItem
-            if not grabbedItem then
-                warn(`[{script.Name}] Player ({caller.Name}.{caller.UserId}) attempted to drag an item while they aren't grabbing anything.`)
-                return end
+            if not grabbedItem then return end
 
             local lastPosition = grabbedItem:getTransform().position
             local constructed = CFrame.lookAt(newPosition, character.Head.Position)
