@@ -27,9 +27,9 @@ local caching = sawdust.core.cache
 --]] Functions
 --]] Listener
 local headerHandlers = {
-    ['spawn'] = function(carUuid: string, spawnOffset: number)
-        local newCar = car.new(carUuid, spawnOffset)
-    end
+    ['spawn'] = function(carUuid: string, spawnOffset: number, buildInfo: {})
+        local newCar = car.new(carUuid, spawnOffset, buildInfo)
+    end,
 }
 
 return function(req)

@@ -18,6 +18,7 @@ local https = game:GetService('HttpService')
 local raider = require(replicatedStorage.Shared.Raider)
 
 local vehiVisualizer = require(script.VehiVisualizer)
+local partChances = require(script.partChances)
 
 local sawdust = require(replicatedStorage.Sawdust)
 local networking = sawdust.core.networking
@@ -40,10 +41,30 @@ local vehicleCache = caching.findCache('vehicle')
 --]] Module
 local car = {}
 car.__index = car
+
+type chassisBuild = {
+    dirty: number,
+}
 type self = {
     --[[ GENERAL ]]--
     uuid: string,      --> Access ID for car
     spawned: boolean?, --> True if spawned, nil if not.
+
+    build: {
+        chassis: {
+            chassis: chassisBuild,
+            driverDoor: chassisBuild,
+            passengerDoor: chassisBuild,
+            hood: chassisBuild
+        },
+
+        engineBay: {
+            engine: string,
+            battery: string,
+            filter: string,
+            resevoir: string,
+        }
+    },
 
     --[[ SERVER ]]--
 
@@ -56,11 +77,35 @@ export type Car = typeof(setmetatable({} :: self, car))
 
 --[[ car.new()
     Create a new car data or physical object. ]]
-function car.new(uuid: string, spawnOffset: number) : Car
+function car.new(uuid: string, spawnOffset: number, buildInfo: {}) : Car
     --[[ CREATE SELF ]]--
     local self = setmetatable({} :: self, car)
     self.uuid = isServer and 
         https:GenerateGUID(false) or uuid
+
+    self.build = isServer and {
+        chassis = {
+            chassis = {
+                dirty = 0,
+            },
+            driverDoor = {
+                dirty = 0
+            },
+            passengerDoor = {
+                dirty = 0
+            },
+            hood = {
+                dirty = 0,
+            },
+        },
+
+        engineBay = {
+            engine   = partChances('engine'),
+            battery  = partChances('battery'),
+            filter   = partChances('filter'),
+            resevoir = partChances('resevoir'),
+        }
+    } or buildInfo
 
     --[[ SERVER BEHAVIOR ]]--
     if isServer then
@@ -73,7 +118,7 @@ function car.new(uuid: string, spawnOffset: number) : Car
         gameChannel.vehicle:with()
             :broadcastGlobally()
             :headers('spawn')
-            :data(self.uuid, xOffset, {engine, battery, resevoir, filter})
+            :data(self.uuid, xOffset, self.build)
             :fire()
 
         self.raider = raider.new(self.uuid)
@@ -83,7 +128,7 @@ function car.new(uuid: string, spawnOffset: number) : Car
     end
 
     --[[ CLIENT BEHAVIOR ]]--
-    self.visualizer = vehiVisualizer.new(uuid, spawnOffset, self.raider)
+    self.visualizer = vehiVisualizer.new(uuid, spawnOffset, self.build)
 
     vehicleCache:setValue(self.uuid, self)
     return self

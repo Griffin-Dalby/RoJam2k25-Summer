@@ -50,7 +50,7 @@ type self = {
 }
 export type CarVisualizer = typeof(setmetatable({} :: self, carVis))
 
-function carVis.new(uuid: string, spawnOffset: number) : CarVisualizer
+function carVis.new(uuid: string, spawnOffset: number, buildInfo: {}) : CarVisualizer
     local self = setmetatable({} :: self, carVis)
 
     --> Setup self
@@ -62,6 +62,70 @@ function carVis.new(uuid: string, spawnOffset: number) : CarVisualizer
     
     local thisSignal = signal.new()
     self.enteredBay = thisSignal:newSignal()
+
+    --> Create engine bay
+    local engineBayInfo = buildInfo.engineBay
+    local engineId, batteryId, filterId, resevoirId =
+        engineBayInfo.engine, engineBayInfo.battery,
+        engineBayInfo.filter, engineBayInfo.resevoir
+    print(engineId,batteryId,filterId,resevoirId)
+    local engine, battery, filter, resevoir =
+        cdnPart:getAsset(engineId), cdnPart:getAsset(batteryId),
+        cdnPart:getAsset(filterId), cdnPart:getAsset(resevoirId)
+    print(engine,battery,filter,resevoir)
+
+    local engineModel, batteryModel, filterModel, resevoirModel =
+        engine.style.model:Clone(), battery.style.model:Clone(),
+        filter.style.model:Clone(), resevoir.style.model:Clone()
+    engineModel.PrimaryPart.Anchored, batteryModel.PrimaryPart.Anchored,
+    filterModel.PrimaryPart.Anchored, resevoirModel.PrimaryPart.Anchored =
+        true, true, true, true
+    
+    local mappedHitboxes = {}
+    local hitboxes = {}
+    local engineBay = self.model.EngineBay
+    for _, hitbox: Instance in pairs(engineBay:GetChildren()) do
+        local hitboxId = hitbox:GetAttribute('hitboxId')
+        if not hitboxId then continue end
+
+        local hitboxToModel = {
+            ['engine'] = engineModel,
+            ['battery'] = batteryModel,
+            ['filter'] = filterModel,
+            ['resevoir'] = resevoirModel,
+        }
+        mappedHitboxes[hitboxId] = hitboxToModel[hitboxId]
+        hitboxes[hitboxId] = hitbox
+    end
+
+    local runtime = runService.Heartbeat:Connect(function(deltaTime)
+        for hitboxId, model in pairs(mappedHitboxes) do
+            model:PivotTo(hitboxes[hitboxId].CFrame * CFrame.Angles(
+                math.rad(90),
+                math.rad(0),
+                math.rad(0)
+            ))
+        end
+    end)
+
+    -- local engineWeld, batteryWeld, filterWeld, resevoirWeld =
+    --     Instance.new('WeldConstraint'), Instance.new('WeldConstraint'),
+    --     Instance.new('WeldConstraint'), Instance.new('WeldConstraint')
+
+    -- engineWeld.Parent, batteryWeld.Parent, filterWeld.Parent, resevoirWeld.Parent =
+    --     engineModel, batteryModel, filterModel, resevoirModel
+
+    -- engineWeld.Part0, batteryWeld.Part0, filterWeld.Part0, resevoirWeld.Part0 =
+    --     engineModel.PrimaryPart, batteryModel.PrimaryPart,
+    --     filterModel.PrimaryPart, resevoirModel.PrimaryPart
+    -- engineWeld.Part1, batteryWeld.Part1, filterWeld.Part1, resevoirWeld.Part1 =
+    --     mappedHitboxes.engine.PrimaryPart, mappedHitboxes.battery.PrimaryPart,
+    --     mappedHitboxes.filter.PrimaryPart, mappedHitboxes.resevoir.PrimaryPart
+
+    engineModel.Parent, batteryModel.Parent, filterModel.Parent, resevoirModel.Parent =
+        engineBay, engineBay, engineBay, engineBay
+
+        
     
     --> Start driving behavior & render
     local spawnPosition = workspace.Gameplay.SpawnStrip.Position
@@ -70,6 +134,7 @@ function carVis.new(uuid: string, spawnOffset: number) : CarVisualizer
     self:__start_driving(spawnPosition)
     self.model.Name = `vehicle_{uuid}`
     self.model.Parent = workspace.__temp
+
 
     --> Setup maid
     self.__maid:add(self.model)
