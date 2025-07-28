@@ -15,6 +15,7 @@ local replicatedStorage = game:GetService('ReplicatedStorage')
 local runService = game:GetService('RunService')
 
 --]] Modules
+local physItem = require(replicatedStorage.Shared.PhysItem)
 local raider = require(replicatedStorage.Shared.Raider)
 
 local sawdust = require(replicatedStorage.Sawdust)
@@ -31,6 +32,7 @@ local cdnGame, cdnVFX  = cdn.getProvider('game'), cdn.getProvider('vfx')
 
 --> Cache groups
 local carSlotCache = caching.findCache('carSlots')
+local physItemCache = caching.findCache('physItems')
 
 --]] Variables
 --]] Functions
@@ -43,6 +45,7 @@ type self = {
     __uuid: string,
     __maid: maid.SawdustMaid,
 
+    buildInfo: {},
     model: Model,
     runtime: RBXScriptConnection,
 
@@ -50,13 +53,14 @@ type self = {
 }
 export type CarVisualizer = typeof(setmetatable({} :: self, carVis))
 
-function carVis.new(uuid: string, spawnOffset: number, buildInfo: {}) : CarVisualizer
+function carVis.new(uuid: string, spawnOffset: number, buildInfo: {}, buildUuids: {[string]: string}) : CarVisualizer
     local self = setmetatable({} :: self, carVis)
 
     --> Setup self
     self.__uuid = uuid
     self.__maid = maid.new()
 
+    self.buildInfo = buildInfo
     self.model = cdnGame:getAsset('VehicleBase'):Clone()
     self.model.PrimaryPart.Anchored = true
 
@@ -75,89 +79,88 @@ function carVis.new(uuid: string, spawnOffset: number, buildInfo: {}) : CarVisua
     local batteryId, batteryIssues = unpack(batteryInfo)
     local filterId, filterIssues = unpack(filterInfo)
     local reservoirId, reservoirIssues = unpack(reservoirInfo)
-    
-    local engine, battery, filter, reservoir =
-        cdnPart:getAsset(engineId), cdnPart:getAsset(batteryId),
-        cdnPart:getAsset(filterId), cdnPart:getAsset(reservoirId)
 
-    local engineModel, batteryModel, filterModel, reservoirModel =
-        engine.style.model:Clone(), battery.style.model:Clone(),
-        filter.style.model:Clone(), reservoir.style.model:Clone()
-    engineModel.PrimaryPart.Anchored, batteryModel.PrimaryPart.Anchored,
-    filterModel.PrimaryPart.Anchored, reservoirModel.PrimaryPart.Anchored =
-        true, true, true, true
+    local function getItem(uuid: string): physItem.PhysicalItem
+        return physItemCache:getValue(uuid) end
+    local engineItem, batteryItem, filterItem, reservoirItem =
+        getItem(buildUuids[1]), getItem(buildUuids[2]), getItem(buildUuids[3]), getItem(buildUuids[4])
+
+    assert(engineItem, `Failed to find engine item!`); assert(batteryItem, `Failed to find battery item!`)
+    assert(filterItem, `Failed to find filter item!`); assert(reservoirItem, `Failed to find reservoir item!`)
     
-    local mappedHitboxes = {}
+    local mappedHitboxes = {} --> Expose this
     local hitboxes = {}
     local engineBay = self.model.EngineBay
+
+    local idToItem = {
+        ['engine'] = engineItem,
+        ['battery'] = batteryItem,
+        ['filter'] = filterItem,
+        ['reservoir'] = reservoirItem,
+    }
     for _, hitbox: Instance in pairs(engineBay:GetChildren()) do
         local hitboxId = hitbox:GetAttribute('hitboxId')
         if not hitboxId then continue end
 
-        local hitboxToModel = {
-            ['engine'] = engineModel,
-            ['battery'] = batteryModel,
-            ['filter'] = filterModel,
-            ['reservoir'] = reservoirModel,
-        }
-        mappedHitboxes[hitboxId] = hitboxToModel[hitboxId]
+        mappedHitboxes[hitboxId] = idToItem[hitboxId]
         hitboxes[hitboxId] = hitbox
     end
 
     local runtime = runService.Heartbeat:Connect(function(deltaTime)
-        for hitboxId, model in pairs(mappedHitboxes) do
-            model:PivotTo(hitboxes[hitboxId].CFrame * CFrame.Angles(
+        for hitboxId, item: physItem.PhysicalItem in pairs(mappedHitboxes) do
+            local model = item.__itemModel
+            local hitboxCf = hitboxes[hitboxId].CFrame :: CFrame
+
+            if item.grabbed then --> Remove from engine bay
+                model.PrimaryPart.Anchored = false
+                mappedHitboxes[hitboxId] = nil
+                
+                return
+            end
+            item:setTransform({hitboxCf.X, hitboxCf.Y, hitboxCf.Z}, {90, 0, 0}) --> :( Idk abt the rotation
+            item.isRendered = true
+
+            model:PivotTo(hitboxCf * CFrame.Angles(
                 math.rad(90),
                 math.rad(0),
                 math.rad(0)
             ))
         end
-    end)
-
-    engineModel.Parent, batteryModel.Parent, filterModel.Parent, reservoirModel.Parent =
-        engineBay, engineBay, engineBay, engineBay
-
-    --> Chassis
-    local chassisIdToPart = {
-        ['chassis'] = self.model.Chassis.Chassis,
-        ['tailgate'] = self.model.Chassis.Tailgate,
-        ['driverDoor'] = self.model.DriverDoor,
-        ['passengerDoor'] = self.model.PassengerDoor,
-        ['hood'] = self.model.Hood
-    }
-    for partId: string, info: {} in pairs(buildInfo.chassis) do
-        local part = chassisIdToPart[partId] :: BasePart
-
-        local surfaceAppearances = {} :: {SurfaceAppearance}
-        for _, inst in pairs(part:GetDescendants()) do
-            if inst:IsA('SurfaceAppearance') then
-                table.insert(surfaceAppearances, inst)
+    
+        for _, hitbox: Instance in pairs(hitboxes) do
+            local hitboxId = hitbox:GetAttribute('hitboxId')
+            if not mappedHitboxes[hitboxId] then
+                --> Missing!
+                hitbox.Transparency = .75
+                hitbox.Missing.Enabled = true
+            else
+                --> Present
+                hitbox.Transparency = 1
+                hitbox.Missing.Enabled = false
             end
         end
+    end)
 
-        local dirty = info.dirty
-        part:SetAttribute('dirty', dirty)
+    engineItem.__itemModel.Parent, batteryItem.__itemModel.Parent,
+    filterItem.__itemModel.Parent, reservoirItem.__itemModel.Parent =
+        workspace.__objects, workspace.__objects, workspace.__objects, workspace.__objects
 
-        local cleanColor = Color3.fromRGB(255, 255, 255)
-        local dirtyColor = Color3.fromRGB(144, 111, 88)
-        local dirtFactor = dirty/100
-
-        for _, appearance in pairs(surfaceAppearances) do
-            appearance.Color = cleanColor:Lerp(dirtyColor, dirtFactor)
-        end
-    end
+    --> Chassis
+    self:updateChassis()
 
     --> Create effects
     local issueHandlers = {
         ['fire'] = function(id: string)
-            local model = mappedHitboxes[id] :: Model
+            local item = mappedHitboxes[id] :: physItem.PhysicalItem
+            local model = item.__itemModel
 
             local vfx = cdnVFX:getAsset('PartFire').Attachment:Clone()
             vfx.Parent = model.PrimaryPart
         end,
 
         ['overheat'] = function(id: string)
-            local model = mappedHitboxes[id] :: Model
+            local item = mappedHitboxes[id] :: physItem.PhysicalItem
+            local model = item.__itemModel
             
             local vfx = cdnVFX:getAsset('PartSmoke').Attachment:Clone()
             vfx.Parent = model.PrimaryPart
@@ -191,6 +194,40 @@ function carVis.new(uuid: string, spawnOffset: number, buildInfo: {}) : CarVisua
     end)
 
     return self
+end
+
+function carVis:updateChassis()
+    local chassisIdToPart = {
+        ['chassis'] = self.model.Chassis.Chassis,
+        ['tailgate'] = self.model.Chassis.Tailgate,
+        ['driverDoor'] = self.model.DriverDoor,
+        ['passengerDoor'] = self.model.PassengerDoor,
+        ['hood'] = self.model.Hood
+    }
+
+    for partId: string, info: {} in pairs(self.buildInfo.chassis) do
+        -- print(partId,':',info.dirty)
+        
+        local part = chassisIdToPart[partId] :: BasePart
+
+        local surfaceAppearances = {} :: {SurfaceAppearance}
+        for _, inst in pairs(part:GetDescendants()) do
+            if inst:IsA('SurfaceAppearance') then
+                table.insert(surfaceAppearances, inst)
+            end
+        end
+
+        local dirty = info.dirty
+        part:SetAttribute('dirty', dirty)
+
+        local cleanColor = Color3.fromRGB(255, 255, 255)
+        local dirtyColor = Color3.fromRGB(144, 111, 88)
+        local dirtFactor = dirty/100
+
+        for _, appearance in pairs(surfaceAppearances) do
+            appearance.Color = cleanColor:Lerp(dirtyColor, dirtFactor)
+        end
+    end
 end
 
 function carVis:hasRaider(thisRaider: raider.Raider)

@@ -54,22 +54,27 @@ physItemRemote:handle(function(req, res)
         if not inversePickup and physItemDrags:getValue(caller) then
             warn(`[{script.Name}] {playerSig} grab an item while they're already grabbing one!`)
             res.setData(false)
-            res.send(); return end
+            res.send(); return false end
         if inversePickup and not physItemDrags:getValue(caller) then
-            warn(`[{script.Name}] {playerSig} pick up and item while they're grabbing none!`)
+            warn(`[{script.Name}] {playerSig} pick up an item while they're grabbing none!`)
             res.setData(false)
-            res.send(); return end
+            res.send(); return false end
 
         if not foundItem then
             warn(`[{script.Name}] {playerSig} interact w/ invalid item (UUID: {itemUuid:sub(1,8)}...)`)
             res.setData(false)
-            res.send(); return end
+            res.send(); return false end
+
+        if not foundItem.isRendered then
+            return true end
 
         local dist = (rootPart.Position-Vector3.new(unpack(foundItem:getTransform().position))).Magnitude
         if not inversePickup and dist>50 then
             warn(`[{script.Name}] {playerSig} interact w/ item outside of range! (UUID: {itemUuid:sub(1,8)}...)`)
             res.setData(false)
-            res.send(); return end
+            res.send(); return false end
+
+        return true
     end
 
     local headerControllers = {
@@ -78,7 +83,8 @@ physItemRemote:handle(function(req, res)
 
             local itemUuid = unpack(req.data)
             local foundItem = physItemCache:getValue(itemUuid) :: physItem.PhysicalItem
-            runSanityChecks(foundItem, itemUuid)
+            local clean = runSanityChecks(foundItem, itemUuid)
+            if not clean then return end
 
             --> Verify
             local canGrab = foundItem:grab(caller)
@@ -101,8 +107,9 @@ physItemRemote:handle(function(req, res)
 
             local itemUuid = unpack(req.data)
             local foundItem = physItemCache:getValue(itemUuid) :: physItem.PhysicalItem
-            runSanityChecks(foundItem, itemUuid, true)
-
+            local clean = runSanityChecks(foundItem, itemUuid, true)
+            if not clean then return end
+            
             --> Player Data
             local playerData = playerCache:findTable(caller)
             local inventory  = playerData:getValue('inventory')
@@ -150,7 +157,7 @@ physItemRemote:handle(function(req, res)
                   rotX, rotY, rotZ = math.deg(rotX), math.deg(rotY), math.deg(rotZ)
 
             local dist = (Vector3.new(unpack(lastPosition))-newPosition).Magnitude
-            if dist>15 then
+            if grabbedItem.isRendered and dist>15 then
                 warn(`[{script.Name}] Player ({caller.Name}.{caller.UserId}) attempted to drag item too far during tick!`)
                 return end
 

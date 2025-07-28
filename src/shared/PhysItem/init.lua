@@ -63,6 +63,8 @@ type self = {
         rotation: {[number]: number}?
     },
 
+    isRendered: boolean,
+
     grabbed: boolean,
     using: boolean,
     grabUpdater: {},
@@ -78,7 +80,7 @@ function physItem.new(itemId: string, itemUuid: string) : PhysicalItem
 
     self.__itemId = itemId
 
-    local shouldReplicate = isServer and (itemUuid or true) or nil
+    local shouldReplicate = isServer and ((itemUuid==nil) and true or itemUuid)
     self.__itemUuid = isServer and httpsService:GenerateGUID(false) or itemUuid
     itemUuid = self.__itemUuid
 
@@ -329,6 +331,8 @@ function physItem:putItem(position: {[number]: number}, rotation: {[number]: num
     
     if isServer then
         --> Tell clients to put this item @ transform
+        self.isRendered = true
+
         gameChannel.physItem:with()
             :broadcastGlobally()
             :headers('put')
@@ -339,12 +343,13 @@ function physItem:putItem(position: {[number]: number}, rotation: {[number]: num
 
     --> Reparent
     if self.__itemModel.Parent~=workspace.__objects then
+        self.isRendered = true
 		self.__itemModel.Parent=workspace.__objects end
     
     --> Put this item @ transform
     if self.grabbed and self.grabbed == players.LocalPlayer then
         --> Drop item
-       
+
         self.grabbed = nil
     end
 

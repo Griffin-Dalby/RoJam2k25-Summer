@@ -76,16 +76,20 @@ function arm.new(target: Attachment)
     self.arm.Parent = camera
     
     --> Setup maid
-    self.__maid = maid.new()
-    self.__maid:add(self.arm)
-    self.__maid:add(self.runtime)
+    -- self.__maid = maid.new()
+    -- self.__maid:add(self.arm)
+    -- self.__maid:add(self.runtime)
 
     return self
 end
 
 function arm:discard()
-    self.__maid:clean()
-    table.clear(self)
+    if self.runtime then
+        self.runtime:Disconnect()
+        self.runtime = nil end
+    if self.arm then
+        self.arm:Destroy()
+        self.arm = nil end
 end
 
 return arm

@@ -45,7 +45,10 @@ local partCDN = cdn.getProvider('part')
 
 local chances = {
     ['engine'] = {
-        {'engine.scrappy', 100}
+        {'engine.scrappy', 50},
+        {'engine.v4', 35},
+        {'engine.v6', 10},
+        {'engine.v8', 5},
     },
     ['battery'] = {
         {'battery.scrappy', 100}
@@ -74,8 +77,9 @@ return function(id: string)
 
     for _, itm in ipairs(chanceTable) do
         currentWeight = currentWeight+itm[2]
-        if random<currentWeight then
+        if random>currentWeight then
             chosenPart = itm[1]
+            break
         end
     end
 

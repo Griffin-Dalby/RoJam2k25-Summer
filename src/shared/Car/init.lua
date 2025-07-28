@@ -16,6 +16,7 @@ local https = game:GetService('HttpService')
 
 --]] Modules
 local raider = require(replicatedStorage.Shared.Raider)
+local physItems = require(replicatedStorage.Shared.PhysItem)
 
 local vehiVisualizer = require(script.VehiVisualizer)
 local partChances = require(script.partChances)
@@ -76,14 +77,20 @@ type self = {
 
 
     --[[ CLIENT ]]--
-    visualizer: vehiVisualizer.CarVisualizer?
+    buildUuids: {
+        engine: string,
+        battery: string,
+        filter: string,
+        reservoir: string,
+    },
 
+    visualizer: vehiVisualizer.CarVisualizer?,
 }
 export type Car = typeof(setmetatable({} :: self, car))
 
 --[[ car.new()
     Create a new car data or physical object. ]]
-function car.new(uuid: string, spawnOffset: number, buildInfo: {}) : Car
+function car.new(uuid: string, spawnOffset: number, buildInfo: {}, buildUuids: {}) : Car
     --[[ CREATE SELF ]]--
     local self = setmetatable({} :: self, car)
     self.uuid = isServer and 
@@ -115,17 +122,41 @@ function car.new(uuid: string, spawnOffset: number, buildInfo: {}) : Car
             reservoir = partChances('reservoir'),
         }
     } or buildInfo
+    self.buildUuids = isServer and nil or buildUuids
 
     --[[ SERVER BEHAVIOR ]]--
     if isServer then
         local xOffset = math.random(-spawnStrip.Size.X/2, spawnStrip.Size.X/2)
         
+        --> Register parts as physItems
+        local engineBay = self.build.engineBay
+
+        local enginePart = physItems.new(engineBay.engine[1])
+        local batteryPart = physItems.new(engineBay.battery[1])
+        local filterPart = physItems.new(engineBay.filter[1])
+        local reservoirPart = physItems.new(engineBay.reservoir[1])
+
         --> Replicate & save
         gameChannel.vehicle:with()
             :broadcastGlobally()
             :headers('spawn')
-            :data(self.uuid, xOffset, self.build)
+            :data(self.uuid, xOffset, self.build, 
+                {enginePart.__itemUuid, batteryPart.__itemUuid,
+                 filterPart.__itemUuid, reservoirPart.__itemUuid, })
             :fire()
+
+        local function replicatePart(itemId, itemUuid)
+            gameChannel.physItem:with()
+                :broadcastGlobally()
+                :headers('create')
+                :data{itemId, itemUuid}
+                :fire()
+        end
+
+        -- replicatePart(engineBay.engine[1], enginePart.__itemUuid) --> Now replicate them
+        -- replicatePart(engineBay.battery[1], batteryPart.__itemUuid)
+        -- replicatePart(engineBay.filter[1], filterPart.__itemUuid)
+        -- replicatePart(engineBay.reservoir[1], reservoirPart.__itemUuid)
 
         self.raider = raider.new(self.uuid)
 
@@ -134,7 +165,7 @@ function car.new(uuid: string, spawnOffset: number, buildInfo: {}) : Car
     end
 
     --[[ CLIENT BEHAVIOR ]]--
-    self.visualizer = vehiVisualizer.new(uuid, spawnOffset, self.build)
+    self.visualizer = vehiVisualizer.new(uuid, spawnOffset, self.build, buildUuids)
 
     vehicleCache:setValue(self.uuid, self)
     return self

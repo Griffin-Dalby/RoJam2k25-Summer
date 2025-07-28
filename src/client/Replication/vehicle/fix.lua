@@ -14,15 +14,30 @@
 local replicatedStorage = game:GetService('ReplicatedStorage')
 
 --]] Modules
+local car = require(replicatedStorage.Shared.Car)
+
 local sawdust = require(replicatedStorage.Sawdust)
+
+local caching = sawdust.core.cache
 
 --]] Settings
 --]] Constants
+--> Caching groups
+local vehicleCache = caching.findCache('vehicle')
+
 --]] Variables
 --]] Functions
 --]] Listener
 local headerHandlers = {
-    
+    ['updateChassis'] = function(vehicleUuid: string, cleanPart: string, partInfo: {})
+        local foundVehicle = vehicleCache:getValue(vehicleUuid) :: car.Car
+        assert(foundVehicle, `Failed to find vehicle! (UUID8: {vehicleUuid:sub(1, 8)})`)
+
+        foundVehicle.build.chassis[cleanPart] = partInfo
+
+        foundVehicle.visualizer.buildInfo = foundVehicle.build
+        foundVehicle.visualizer:updateChassis()
+    end
 }
 
 return function (req)

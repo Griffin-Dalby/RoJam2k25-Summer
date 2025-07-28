@@ -65,13 +65,16 @@ local headerHandlers = {
             warn(`[{script.Name}] Player ({callerTag}) attempted to clean a vehicle, while not holding a cleaning item!`)
             return end
 
+        if physItem.wetness<=0 then return end --> Too dry to clean
+
         partInfo.dirty=math.clamp(partInfo.dirty-2, 0, partInfo.dirty+2)
         physItem:setWetness(math.clamp(physItem.wetness-.5, 0, 100))
 
         vehicleChannel.fix:with()
             :broadcastGlobally()
             :headers('updateChassis')
-            :data(vehicle.uuid, cleanPart, partInfo)
+            :data(vehicle.uuid, translator[cleanPart], partInfo)
+            :fire()
     end
 }
 

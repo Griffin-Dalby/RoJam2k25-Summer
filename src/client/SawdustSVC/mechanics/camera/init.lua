@@ -72,12 +72,17 @@ return sawdust.builder.new('camera')
         self.__maid      = nil
 
         self.grabSvc = deps.grab
+
+        self.debounce = false
     end)
 
     :method('putArm', function(self, castResult: RaycastResult)
         if self.physDragging then
             warn(`[{script.Name}] Attempt to internally physDrag while already doing so!`)
             return end
+        if self.debounce then return end
+        self.debounce = true
+        
         self.physDragging = true
         self.__maid = maid.new()
 
@@ -217,6 +222,10 @@ return sawdust.builder.new('camera')
             self.currentArm:discard() end
         if self.__maid then
             self.__maid:clean() end
+
+        task.delay(.25, function()
+            self.debounce = false
+        end)
     end)
 
     :start(function(self, deps)
