@@ -27,7 +27,7 @@ local caching = sawdust.core.cache
 --]] Constants
 --> CDN providers
 local cdnPart, cdnItem = cdn.getProvider('part'), cdn.getProvider('item')
-local cdnGame          = cdn.getProvider('game')
+local cdnGame, cdnVFX  = cdn.getProvider('game'), cdn.getProvider('vfx')
 
 --> Cache groups
 local carSlotCache = caching.findCache('carSlots')
@@ -65,20 +65,24 @@ function carVis.new(uuid: string, spawnOffset: number, buildInfo: {}) : CarVisua
 
     --> Create engine bay
     local engineBayInfo = buildInfo.engineBay
-    local engineId, batteryId, filterId, resevoirId =
+    local engineInfo, batteryInfo, filterInfo, reservoirInfo =
         engineBayInfo.engine, engineBayInfo.battery,
-        engineBayInfo.filter, engineBayInfo.resevoir
-    print(engineId,batteryId,filterId,resevoirId)
-    local engine, battery, filter, resevoir =
-        cdnPart:getAsset(engineId), cdnPart:getAsset(batteryId),
-        cdnPart:getAsset(filterId), cdnPart:getAsset(resevoirId)
-    print(engine,battery,filter,resevoir)
+        engineBayInfo.filter, engineBayInfo.reservoir
 
-    local engineModel, batteryModel, filterModel, resevoirModel =
+    local engineId, engineIssues = unpack(engineInfo)
+    local batteryId, batteryIssues = unpack(batteryInfo)
+    local filterId, filterIssues = unpack(filterInfo)
+    local reservoirId, reservoirIssues = unpack(reservoirInfo)
+    
+    local engine, battery, filter, reservoir =
+        cdnPart:getAsset(engineId), cdnPart:getAsset(batteryId),
+        cdnPart:getAsset(filterId), cdnPart:getAsset(reservoirId)
+
+    local engineModel, batteryModel, filterModel, reservoirModel =
         engine.style.model:Clone(), battery.style.model:Clone(),
-        filter.style.model:Clone(), resevoir.style.model:Clone()
+        filter.style.model:Clone(), reservoir.style.model:Clone()
     engineModel.PrimaryPart.Anchored, batteryModel.PrimaryPart.Anchored,
-    filterModel.PrimaryPart.Anchored, resevoirModel.PrimaryPart.Anchored =
+    filterModel.PrimaryPart.Anchored, reservoirModel.PrimaryPart.Anchored =
         true, true, true, true
     
     local mappedHitboxes = {}
@@ -92,7 +96,7 @@ function carVis.new(uuid: string, spawnOffset: number, buildInfo: {}) : CarVisua
             ['engine'] = engineModel,
             ['battery'] = batteryModel,
             ['filter'] = filterModel,
-            ['resevoir'] = resevoirModel,
+            ['reservoir'] = reservoirModel,
         }
         mappedHitboxes[hitboxId] = hitboxToModel[hitboxId]
         hitboxes[hitboxId] = hitbox
@@ -108,24 +112,66 @@ function carVis.new(uuid: string, spawnOffset: number, buildInfo: {}) : CarVisua
         end
     end)
 
-    -- local engineWeld, batteryWeld, filterWeld, resevoirWeld =
-    --     Instance.new('WeldConstraint'), Instance.new('WeldConstraint'),
-    --     Instance.new('WeldConstraint'), Instance.new('WeldConstraint')
-
-    -- engineWeld.Parent, batteryWeld.Parent, filterWeld.Parent, resevoirWeld.Parent =
-    --     engineModel, batteryModel, filterModel, resevoirModel
-
-    -- engineWeld.Part0, batteryWeld.Part0, filterWeld.Part0, resevoirWeld.Part0 =
-    --     engineModel.PrimaryPart, batteryModel.PrimaryPart,
-    --     filterModel.PrimaryPart, resevoirModel.PrimaryPart
-    -- engineWeld.Part1, batteryWeld.Part1, filterWeld.Part1, resevoirWeld.Part1 =
-    --     mappedHitboxes.engine.PrimaryPart, mappedHitboxes.battery.PrimaryPart,
-    --     mappedHitboxes.filter.PrimaryPart, mappedHitboxes.resevoir.PrimaryPart
-
-    engineModel.Parent, batteryModel.Parent, filterModel.Parent, resevoirModel.Parent =
+    engineModel.Parent, batteryModel.Parent, filterModel.Parent, reservoirModel.Parent =
         engineBay, engineBay, engineBay, engineBay
 
-        
+    --> Chassis
+    local chassisIdToPart = {
+        ['chassis'] = self.model.Chassis.Chassis,
+        ['driverDoor'] = self.model.DriverDoor,
+        ['passengerDoor'] = self.model.PassengerDoor,
+        ['hood'] = self.model.Hood
+    }
+    for partId: string, info: {} in pairs(buildInfo.chassis) do
+        local part = chassisIdToPart[partId] :: BasePart
+
+        local surfaceAppearances = {} :: {SurfaceAppearance}
+        for _, inst in pairs(part:GetDescendants()) do
+            if inst:IsA('SurfaceAppearance') then
+                table.insert(surfaceAppearances, inst)
+            end
+        end
+
+        local dirty = info.dirty
+
+        local cleanColor = Color3.fromRGB(255, 255, 255)
+        local dirtyColor = Color3.fromRGB(144, 111, 88)
+        local dirtFactor = dirty/100
+
+        for _, appearance in pairs(surfaceAppearances) do
+            appearance.Color = cleanColor:Lerp(dirtyColor, dirtFactor)
+        end
+    end
+
+    --> Create effects
+    local issueHandlers = {
+        ['fire'] = function(id: string)
+            local model = mappedHitboxes[id] :: Model
+
+            local vfx = cdnVFX:getAsset('PartFire').Attachment:Clone()
+            vfx.Parent = model.PrimaryPart
+        end,
+
+        ['overheat'] = function(id: string)
+            local model = mappedHitboxes[id] :: Model
+            
+            local vfx = cdnVFX:getAsset('PartSmoke').Attachment:Clone()
+            vfx.Parent = model.PrimaryPart
+        end
+    }
+
+    local function handleIssues(id: string, issues: {})
+        for issue: string, isIssue: boolean in pairs(issues) do
+            if not isIssue then continue end
+            print(id, issue)
+            issueHandlers[issue](id)
+        end
+    end
+
+    handleIssues('engine', engineIssues)
+    handleIssues('battery', batteryIssues)
+    handleIssues('filter', filterIssues)
+    handleIssues('reservoir', reservoirIssues)
     
     --> Start driving behavior & render
     local spawnPosition = workspace.Gameplay.SpawnStrip.Position
@@ -134,7 +180,6 @@ function carVis.new(uuid: string, spawnOffset: number, buildInfo: {}) : CarVisua
     self:__start_driving(spawnPosition)
     self.model.Name = `vehicle_{uuid}`
     self.model.Parent = workspace.__temp
-
 
     --> Setup maid
     self.__maid:add(self.model)
@@ -240,20 +285,20 @@ function carVis:__start_driving(spawnPosition: Vector3)
             local shouldStartTurn = false
             
             if elapsed <= accelTime then --> Accel
-            cSpeed = (maxSpeed/accelTime)*elapsed
-            distTravel = .5*(maxSpeed/accelTime)*elapsed^2
+                cSpeed = (maxSpeed/accelTime)*elapsed
+                distTravel = .5*(maxSpeed/accelTime)*elapsed^2
             elseif elapsed <= accelTime+(cruiseDist/maxSpeed) then --> Cruising
-            local cruiseTime = elapsed-accelTime
-            cSpeed = maxSpeed
-            distTravel = accelDist+(maxSpeed*cruiseTime)
-        else --> Decel
-            local decelElapsed = elapsed-accelTime-(cruiseDist/maxSpeed)
-            local decelProg = decelElapsed/decelTime
-            cSpeed = maxSpeed*(1-decelProg)
-            distTravel = accelDist+cruiseDist+(maxSpeed*decelElapsed*(1-decelProg/2))
+                local cruiseTime = elapsed-accelTime
+                cSpeed = maxSpeed
+                distTravel = accelDist+(maxSpeed*cruiseTime)
+            else --> Decel
+                local decelElapsed = elapsed-accelTime-(cruiseDist/maxSpeed)
+                local decelProg = decelElapsed/decelTime
+                cSpeed = maxSpeed*(1-decelProg)
+                distTravel = accelDist+cruiseDist+(maxSpeed*decelElapsed*(1-decelProg/2))
             
-            if decelProg >= .7 and currentPhase == 'approaching' then
-                shouldStartTurn = true end
+                if decelProg >= .7 and currentPhase == 'approaching' then
+                    shouldStartTurn = true end
         end
 
         if shouldStartTurn then

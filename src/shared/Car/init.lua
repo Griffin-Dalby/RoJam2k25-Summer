@@ -59,10 +59,10 @@ type self = {
         },
 
         engineBay: {
-            engine: string,
-            battery: string,
-            filter: string,
-            resevoir: string,
+            engine: {},
+            battery: {},
+            filter: {},
+            reservoir: {},
         }
     },
 
@@ -86,33 +86,30 @@ function car.new(uuid: string, spawnOffset: number, buildInfo: {}) : Car
     self.build = isServer and {
         chassis = {
             chassis = {
-                dirty = 0,
+                dirty = math.random(0, 100),
             },
             driverDoor = {
-                dirty = 0
+                dirty = math.random(0, 100)
             },
             passengerDoor = {
-                dirty = 0
+                dirty = math.random(0, 100)
             },
             hood = {
-                dirty = 0,
+                dirty = math.random(0, 100),
             },
         },
 
         engineBay = {
-            engine   = partChances('engine'),
-            battery  = partChances('battery'),
-            filter   = partChances('filter'),
-            resevoir = partChances('resevoir'),
+            engine    = partChances('engine'),
+            battery   = partChances('battery'),
+            filter    = partChances('filter'),
+            reservoir = partChances('reservoir'),
         }
     } or buildInfo
 
     --[[ SERVER BEHAVIOR ]]--
     if isServer then
         local xOffset = math.random(-spawnStrip.Size.X/2, spawnStrip.Size.X/2)
-
-        --> Choose vehicle variety
-        local engine, battery, resevoir, filter
         
         --> Replicate & save
         gameChannel.vehicle:with()
