@@ -58,6 +58,7 @@ local headerHandlers = {
             if raycast then
                 local instance = raycast.Instance
                 local uuid, id = instance:GetAttribute('itemUuid'), instance:GetAttribute('itemId')
+                if not uuid or not id then return end
 
                 worldChannel.faucet:with()
                     :headers('wet')

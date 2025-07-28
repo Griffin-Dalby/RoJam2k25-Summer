@@ -67,6 +67,10 @@ return builder.new('grab')
         self.grabLength = 4
     end)
 
+    :method('getDragging', function()
+        return targetedPItem
+    end)
+
     :start(function(self, deps)
         --[[ CHARACTER ]]--
         local character = player.Character or player.CharacterAdded:Wait()
@@ -293,7 +297,9 @@ return builder.new('grab')
             drop()
         end, false, unpack(keybinds.drop))
 
-        contextActionService:BindAction('use', function()
-            
+        contextActionService:BindAction('use', function(_, inputState)
+            if targetedPItem then
+                targetedPItem:use(inputState == Enum.UserInputState.Begin) end
+            return Enum.ContextActionResult.Pass
         end, false, unpack(keybinds.use))
     end)

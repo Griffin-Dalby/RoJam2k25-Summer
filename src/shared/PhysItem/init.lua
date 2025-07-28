@@ -64,6 +64,7 @@ type self = {
     },
 
     grabbed: boolean,
+    using: boolean,
     grabUpdater: {},
     lastDragUpdate: number,
 
@@ -87,6 +88,7 @@ function physItem.new(itemId: string, itemUuid: string) : PhysicalItem
     }
 
     self.grabbed = false
+    self.using = false
     self.grabUpdater = nil
 
     self.wetness = 0
@@ -197,16 +199,16 @@ function physItem:grab(grabbingPlayer: Player, callback: (external: true) -> nil
 
     local alignPos = Instance.new('AlignPosition')
     alignPos.MaxForce = math.huge
-    alignPos.MaxVelocity = 200
-    alignPos.Responsiveness = 25
+    alignPos.MaxVelocity = 150
+    alignPos.Responsiveness = 40
     alignPos.RigidityEnabled = true
     alignPos.Attachment0, alignPos.Attachment1 = itemAttachment, goalAttachment
     alignPos.Parent = itemAttachment.Parent
 
     local alignOri = Instance.new('AlignOrientation')
     alignOri.MaxTorque = math.huge
-    alignOri.MaxAngularVelocity = 300
-    alignOri.Responsiveness = 200
+    alignOri.MaxAngularVelocity = 500
+    alignOri.Responsiveness = 100
     alignOri.Attachment0, alignOri.Attachment1 = itemAttachment, goalAttachment
     alignOri.Parent = itemAttachment.Parent
 
@@ -223,6 +225,10 @@ function physItem:grab(grabbingPlayer: Player, callback: (external: true) -> nil
     local thisPlayer = players.LocalPlayer
     local timeSinceLastUpdate = 100
 
+    local castParams = RaycastParams.new()
+    castParams.FilterType = Enum.RaycastFilterType.Exclude
+    castParams.FilterDescendantsInstances = {goalPart, self.__itemModel, thisPlayer.Character}
+
     local interpPos = nil
     self.lastDragUpdate = tick()
     self.grabUpdater = runService.RenderStepped:Connect(function(deltaTime)
@@ -236,7 +242,9 @@ function physItem:grab(grabbingPlayer: Player, callback: (external: true) -> nil
         local currentPosition
         if thisPlayer==grabbingPlayer then
             basePosition = camera.CFrame
-            goalPosition = basePosition.Position + basePosition.LookVector*itemHoldDistance
+
+            local ray = workspace:Raycast(basePosition.Position, basePosition.LookVector*itemHoldDistance, castParams)
+            goalPosition = ray and ray.Position or (basePosition.Position + basePosition.LookVector*itemHoldDistance)
         else
             local head = grabbingPlayer.Character:FindFirstChild('Head')
             basePosition = head.CFrame
@@ -265,6 +273,7 @@ function physItem:grab(grabbingPlayer: Player, callback: (external: true) -> nil
                 currentPosition,
                 basePosition.Position,
                 Vector3.yAxis)
+            self.__itemModel:PivotTo(goalAttachment.WorldCFrame)
         else
             goalAttachment.WorldCFrame = CFrame.lookAt(
                 goalPosition,
@@ -381,6 +390,24 @@ function physItem:destroy(excludeTbl: {Player})
     table.clear(self)
 end
 
+function physItem:use(isUsing: boolean)
+    if isServer then return end
+    if not self.grabbed or self.grabbed~=players.LocalPlayer then return end
+    
+    self.using = isUsing
+
+    if isUsing then
+        self.__behaviorEnv = {
+            model = self.__itemModel
+        }
+
+        self.__itemAsset.behavior.startUsing(self.__behaviorEnv)
+    else
+        self.__itemAsset.behavior.stopUsing(self.__behaviorEnv)
+        self.__behaviorEnv = nil
+    end
+end
+
 function physItem:setWetness(wetness: number)
     wetness = math.clamp(wetness, 0, 100)
     if wetness==self.wetness then return end
@@ -396,15 +423,16 @@ function physItem:setWetness(wetness: number)
         return
     end
     
-    print('set wetness', wetness)
     --> VFX Checks
-    if wetness > 30 then --> Threshold for drip VFX (scale amount of drips w/ wetness)
+    local dripThreshold = 10
+
+    if wetness > dripThreshold then --> Threshold for drip VFX (scale amount of drips w/ wetness)
         if not self.dripEffect then
             self.dripEffect = vfxCDN:getAsset('itemDrip'):Clone() :: ParticleEmitter
             self.dripEffect.Parent = self.__itemModel:IsA('Model') and (self.__itemModel.PrimaryPart or self.__itemModel) or self.__itemModel
         end
 
-        self.dripEffect.Rate = math.abs((wetness-30)/(100-30))*100
+        self.dripEffect.Rate = math.abs((wetness-dripThreshold)/(100-dripThreshold))*100
     else --> Cleanup VFX 
         if self.dripEffect then
             self.dripEffect:Destroy()
@@ -413,10 +441,30 @@ function physItem:setWetness(wetness: number)
     end
 
     --> Set colors
-    if self.__itemModel:IsA('BasePart') then
-        
-    elseif self.__itemModel:IsA('Model') then
+    local function applyWetnessToPart(part)
+        if not part:GetAttribute('OriginalColor') then
+            part:SetAttribute('OriginalColor', part.Color)
+        end
 
+        local origColor = part:GetAttribute('OriginalColor')
+
+        local maxDarken = .6
+        local darkenFac = (wetness/100)*maxDarken
+
+        part.Color = Color3.new(
+            origColor.R * (1-darkenFac),
+            origColor.G * (1-darkenFac),
+            origColor.B * (1-darkenFac)
+        )
+    end
+
+    if self.__itemModel:IsA('BasePart') then
+        applyWetnessToPart(self.__itemModel)
+    elseif self.__itemModel:IsA('Model') then
+        for _, part in pairs(self.__itemModel:GetDescendants()) do
+            if not part:IsA('BasePart') then continue end
+            applyWetnessToPart(part)
+        end
     else
         error(`[{script.Name}] Can't darken item colors because it's unsupported!`)
     end

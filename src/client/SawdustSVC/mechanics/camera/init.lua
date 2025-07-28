@@ -70,6 +70,8 @@ return sawdust.builder.new('camera')
 
         self.currentArm  = nil
         self.__maid      = nil
+
+        self.grabSvc = deps.grab
     end)
 
     :method('putArm', function(self, castResult: RaycastResult)
@@ -168,9 +170,9 @@ return sawdust.builder.new('camera')
         else
             constraintOrVelo = Instance.new('SpringConstraint')
             constraintOrVelo.MaxForce = math.huge
-            constraintOrVelo.Stiffness = 70
-            constraintOrVelo.FreeLength = 2
-            constraintOrVelo.Damping = 6
+            constraintOrVelo.Stiffness = (topLevel and topLevel.PrimaryPart) and topLevel.PrimaryPart.Mass*100 or hitInstance.Mass*100
+            constraintOrVelo.FreeLength = 0
+            constraintOrVelo.Damping = 2
             constraintOrVelo.Attachment0, constraintOrVelo.Attachment1
                 = hitAttachment, goalAttachment
             constraintOrVelo.Parent = hitInstance
@@ -222,10 +224,17 @@ return sawdust.builder.new('camera')
         local params = generateParams(character)
 
         contextActionService:BindAction('physDrag', function(_, inputState)
+            if self.grabSvc.getDragging() then
+                if self.physDragging then
+                    self.retractArm() end
+
+                return Enum.ContextActionResult.Pass
+            end
+
             if inputState==Enum.UserInputState.Begin then
                 if self.physDragging then
                     warn(`[{script.Name}] Attempt to PhysDrag while already doing it!`)
-                    return end
+                    return Enum.ContextActionResult.Pass end
 
                 --> Raycast
                 local cast = workspace:Raycast(
@@ -238,5 +247,6 @@ return sawdust.builder.new('camera')
                 if self.physDragging then
                     self.retractArm() end
             end
+            return Enum.ContextActionResult.Pass
         end, false, unpack(keybinds.physDrag))
     end)

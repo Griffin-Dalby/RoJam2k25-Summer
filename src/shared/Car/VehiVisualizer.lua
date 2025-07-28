@@ -59,6 +59,8 @@ function carVis.new(uuid: string, spawnOffset: number, buildInfo: {}) : CarVisua
 
     self.model = cdnGame:getAsset('VehicleBase'):Clone()
     self.model.PrimaryPart.Anchored = true
+
+    self.model:SetAttribute('uuid', uuid)
     
     local thisSignal = signal.new()
     self.enteredBay = thisSignal:newSignal()
@@ -118,6 +120,7 @@ function carVis.new(uuid: string, spawnOffset: number, buildInfo: {}) : CarVisua
     --> Chassis
     local chassisIdToPart = {
         ['chassis'] = self.model.Chassis.Chassis,
+        ['tailgate'] = self.model.Chassis.Tailgate,
         ['driverDoor'] = self.model.DriverDoor,
         ['passengerDoor'] = self.model.PassengerDoor,
         ['hood'] = self.model.Hood
@@ -133,6 +136,7 @@ function carVis.new(uuid: string, spawnOffset: number, buildInfo: {}) : CarVisua
         end
 
         local dirty = info.dirty
+        part:SetAttribute('dirty', dirty)
 
         local cleanColor = Color3.fromRGB(255, 255, 255)
         local dirtyColor = Color3.fromRGB(144, 111, 88)
@@ -163,7 +167,6 @@ function carVis.new(uuid: string, spawnOffset: number, buildInfo: {}) : CarVisua
     local function handleIssues(id: string, issues: {})
         for issue: string, isIssue: boolean in pairs(issues) do
             if not isIssue then continue end
-            print(id, issue)
             issueHandlers[issue](id)
         end
     end

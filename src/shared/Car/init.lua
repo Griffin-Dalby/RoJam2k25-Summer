@@ -27,6 +27,11 @@ local caching = sawdust.core.cache
 --]] Settings
 local spawnStrip = workspace.Gameplay:WaitForChild('SpawnStrip') :: Part
 
+local defDirtyRange = {0, 100}
+local dirtyRanges = {
+
+}
+
 --]] Constants
 local isServer = runService:IsServer()
 
@@ -53,6 +58,7 @@ type self = {
     build: {
         chassis: {
             chassis: chassisBuild,
+            tailgate: chassisBuild,
             driverDoor: chassisBuild,
             passengerDoor: chassisBuild,
             hood: chassisBuild
@@ -83,20 +89,23 @@ function car.new(uuid: string, spawnOffset: number, buildInfo: {}) : Car
     self.uuid = isServer and 
         https:GenerateGUID(false) or uuid
 
+    local function generateChassisBuild(id: string)
+        local dirtyRange = dirtyRanges[id]
+
+        return {
+            dirty = dirtyRange 
+                and math.random(dirtyRange[1], dirtyRange[2]) 
+                or math.random(defDirtyRange[1], defDirtyRange[2])
+        }
+    end
+
     self.build = isServer and {
         chassis = {
-            chassis = {
-                dirty = math.random(0, 100),
-            },
-            driverDoor = {
-                dirty = math.random(0, 100)
-            },
-            passengerDoor = {
-                dirty = math.random(0, 100)
-            },
-            hood = {
-                dirty = math.random(0, 100),
-            },
+            chassis = generateChassisBuild('chassis'),
+            tailgate = generateChassisBuild('tailgate'),
+            driverDoor = generateChassisBuild('driverDoor'),
+            passengerDoor = generateChassisBuild('passengerDoor'),
+            hood = generateChassisBuild('hood'),
         },
 
         engineBay = {
