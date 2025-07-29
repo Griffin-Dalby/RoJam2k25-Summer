@@ -29,8 +29,8 @@ local vehicleCache = caching.findCache('vehicle')
 --]] Functions
 --]] Listener
 local headerHandlers = {
-    ['create'] = function(raiderUuid: string, outfitId: number, headId: number, skinTone: Color3, name: {})
-        local thisRaider = raider.new(raiderUuid, outfitId, headId, skinTone, name)
+    ['create'] = function(raiderUuid: string, outfitId: number, headId: number, skinTone: Color3, name: {}, mood: string)
+        local thisRaider = raider.new(raiderUuid, outfitId, headId, skinTone, name, mood)
 
         --> Attempt to add to vehicle
         local foundVehicle = vehicleCache:getValue(raiderUuid) :: car.Car

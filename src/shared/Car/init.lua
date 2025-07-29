@@ -182,28 +182,30 @@ function car.new(uuid: string, spawnOffset: number, buildInfo: {}, buildUuids: {
             weight = 0
             for i=1,#chances do
                 weight = weight+chances[i][2]
-                if roll < weight then
+                if roll <= weight then
                     return chances[i][1]
                 end
             end
         end
 
         for id, amount in pairs(spawnParts) do
-            local part = physItems.new(randomPart(id))
+            for i=1,amount do
+                local part = physItems.new(randomPart(id))
 
-            local spawnAreas = workspace.Gameplay.PartSpawns
-            local areaChildren = spawnAreas:GetChildren()
-            local chosenArea = areaChildren[math.random(1, #areaChildren)]
+                local spawnAreas = workspace.Gameplay.PartSpawns
+                local areaChildren = spawnAreas:GetChildren()
+                local chosenArea = areaChildren[math.random(1, #areaChildren)]
 
-            local rng = Random.new()
-            local x = rng:NextNumber(-chosenArea.Size.X/2, chosenArea.Size.X/2)
-            local y = rng:NextNumber(-chosenArea.Size.Y/2, chosenArea.Size.Y/2)
-            local z = rng:NextNumber(-chosenArea.Size.Z/2, chosenArea.Size.Z/2)
+                local rng = Random.new()
+                local x = rng:NextNumber(-chosenArea.Size.X/2, chosenArea.Size.X/2)
+                local y = rng:NextNumber(-chosenArea.Size.Y/2, chosenArea.Size.Y/2)
+                local z = rng:NextNumber(-chosenArea.Size.Z/2, chosenArea.Size.Z/2)
 
-            part:putItem(
-                {chosenArea.Position.X+x, chosenArea.Position.Y+y, chosenArea.Position.Z+z},
-                {math.random(-360, 360), math.random(-360, 360), math.random(-360, 360)}
-            )
+                part:putItem(
+                    {chosenArea.Position.X+x, chosenArea.Position.Y+y, chosenArea.Position.Z+z},
+                    {math.random(-360, 360), math.random(-360, 360), math.random(-360, 360)}
+                )
+            end
         end
         
         --> Replicate & save
@@ -221,6 +223,8 @@ function car.new(uuid: string, spawnOffset: number, buildInfo: {}, buildUuids: {
         engineBay.reservoir = reservoirPart
 
         self.raider = raider.new(self.uuid)
+        self.raider:calculatePatience(self.build)
+
         vehicleCache:setValue(self.uuid, self)
         return self
     end
@@ -232,7 +236,18 @@ function car.new(uuid: string, spawnOffset: number, buildInfo: {}, buildUuids: {
     return self
 end
 
+--[[ FETCHERS ]]--
+function car:getBay(): number
+    return self.bayId end
+function car:getRaider(): raider.Raider
+    return self.raider end
+
 --[[ CONTROLLER ]]--
+
+--[[ car:setBay(bayId: number)
+    Sets the internal bay ID value. ]]
+function car:setBay(bayId: number)
+    self.bayId = bayId end
 
 --[[ car:hasRaider(raider: Raider)
     This will add a raider to the car. ]]

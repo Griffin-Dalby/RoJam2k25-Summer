@@ -34,6 +34,7 @@ local cdnPart, cdnItem = cdn.getProvider('part'), cdn.getProvider('item')
 local cdnGame, cdnVFX  = cdn.getProvider('game'), cdn.getProvider('vfx')
 
 --> Cache groups
+local vehicleCache = caching.findCache('vehicle')
 local carSlotCache = caching.findCache('carSlots')
 local physItemCache = caching.findCache('physItems')
 
@@ -141,7 +142,7 @@ function carVis.new(uuid: string, spawnOffset: number, buildInfo: {}, buildUuids
                 return
             end
             model.PrimaryPart.Anchored = true
-            item:setTransform{{hitboxCf.X, hitboxCf.Y, hitboxCf.Z}, {90, 0, 0}} --> :( Idk abt the rotation
+            item:setTransform{{hitboxCf.X, hitboxCf.Y, hitboxCf.Z}, {90, 0, 0}}
             item.isRendered = true
 
             model:PivotTo(hitboxCf * CFrame.Angles(
@@ -330,6 +331,8 @@ function carVis:__start_driving(spawnPosition: Vector3)
     local currentPhase = 'approaching' :: 'approaching'|'turning'|'queueing'
     local startTime = tick()
 
+    local vehicle = vehicleCache:getValue(self.__uuid)
+
     local function handlePos(position: Vector3)
         return Vector3.new(
             position.X,
@@ -472,6 +475,7 @@ function carVis:__start_driving(spawnPosition: Vector3)
                 --> Move raider outside
                 task.delay(1, function()
                     self.__raider:pivotTo(CFrame.new(slotPosition+Vector3.new(0, 3, 18))*CFrame.Angles(0, math.rad(180), 0))
+                    self.__raider:calculatePatience(self.buildInfo)
                 end)
             else
                 local alpha = elapsed / queueTime

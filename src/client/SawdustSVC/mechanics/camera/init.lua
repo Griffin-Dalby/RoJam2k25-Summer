@@ -150,6 +150,12 @@ return sawdust.builder.new('camera')
             task.wait(.1)
             constraintOrVelo.AngularVelocity = Vector3.zero
 
+            if not self.physDragging then
+                if constraintOrVelo then
+                    constraintOrVelo:Destroy() end
+                print(goalPart)
+                return end
+
             veloConnection = runService.Heartbeat:Connect(function()
                 local hingeWorldPos = hingePart.CFrame.Position
                 local hingeAxis     = isHorizontal and hingePart.CFrame.LookVector or hingePart.CFrame.UpVector

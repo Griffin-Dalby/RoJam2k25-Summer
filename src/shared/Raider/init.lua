@@ -234,6 +234,12 @@ local moods = {
     'violent',
 }
 
+local moodBasePatience = {
+    ['patient'] = 50,
+    ['impatient'] = 25,
+    ['violent'] = 35
+}
+
 --]] Constants
 local isServer = runService:IsServer()
 
@@ -262,8 +268,11 @@ raider.__index = raider
 type self = {
     uuid: string,
     mood: string,
-
+    
     model: Model?,
+
+    maxPatience: number,
+    patience: number,
 }
 export type Raider = typeof(setmetatable({} :: self, raider))
 
@@ -289,7 +298,7 @@ function raider.new(uuid: string, outfitId: number, headId: number, skinTone: Co
         gameChannel.raider:with()
             :broadcastGlobally()
             :headers('create')
-            :data(self.uuid, outfitId, headId, skinTone, name)
+            :data(self.uuid, outfitId, headId, skinTone, name, self.mood)
             :fire()
 
         return self
@@ -329,7 +338,36 @@ function raider.new(uuid: string, outfitId: number, headId: number, skinTone: Co
     bodyColors.LeftLegColor3, bodyColors.RightLegColor3 = skinTone, skinTone
     bodyColors.Parent = self.model
 
-    local firstName, lastName = unpack(name)
+    local firstName: string, lastName: string = unpack(name)
+
+    --> UI
+    local vehicle = vehicleCache:getValue(uuid)
+    assert(`Failed to find vehicle w/ raider uuid!`)
+
+    local player = players.LocalPlayer
+    local playerUi = player.PlayerGui.UI
+
+    local raiderTemplate = playerUi.Templates.RaiderSlot:Clone()
+    raiderTemplate.RaiderName.Text = `{firstName} {lastName:sub(1,1):upper()}.`
+    
+    local bayId = vehicle:getBay()
+    
+    local templateModel = self.model:Clone()
+    templateModel:PivotTo(CFrame.new(0, 0, 0))
+    templateModel.Parent = raiderTemplate.Viewport
+
+    local patienceMeter = runService.Heartbeat:Connect(function(dT)
+        if not self.patience then return end
+        raiderTemplate.Patience.Bar.Size = UDim2.new(self.patience/self.maxPatience, 0, 1, 0)
+
+        self.patience -= dT --> Accurate second timer
+        if self.patience <= 0 then
+            --> Patience ran out!
+        end
+    end)
+
+    raiderTemplate.Parent = playerUi.RaiderList
+    raiderTemplate.Visible = true
 
     --> Interaction
     local prompt = Instance.new('ProximityPrompt')
@@ -380,6 +418,10 @@ function raider.new(uuid: string, outfitId: number, headId: number, skinTone: Co
 
         doneConnection = raiderInteraction.Interactions.Done.Button.MouseButton1Down:Once(function()
             raiderInteraction.Interactions.Visible = false
+            patienceMeter:Disconnect()
+            patienceMeter = nil
+
+            raiderTemplate:Destroy()
 
             task.delay(2, function()
                 cleanup()
@@ -392,6 +434,39 @@ function raider.new(uuid: string, outfitId: number, headId: number, skinTone: Co
     self.model.Parent = workspace.__temp
 
     return self
+end
+
+function raider:calculatePatience(vehicleBuild: {})
+    self.maxPatience = moodBasePatience[self.mood]
+    
+    --> Chassis issues
+    for partId: string, partInfo: {} in pairs(vehicleBuild.chassis) do
+        local dirty = partInfo.dirty
+
+        self.maxPatience += (dirty*.065)
+    end
+
+    --> Engine bay issues
+    local issuePatience = {
+        ['fire'] = 20, --> 20 seconds per part fire
+        ['overheat'] = 15 --> 15 seconds per overheat
+    }
+    for bayPartId: string, engineItem in pairs(vehicleBuild.engineBay) do
+        if engineItem.__itemUuid then
+            local tags = engineItem:getTags()
+            for tag: string in pairs(tags) do
+                local issueId = tag:split('.')[2]
+                self.maxPatience += issuePatience[issueId]
+            end
+        else
+            for issueId: string, isActive: boolean in pairs(engineItem[2]) do
+                if not isActive then continue end
+                self.maxPatience += issuePatience[issueId]
+            end
+        end
+    end
+
+    self.patience = self.maxPatience
 end
 
 function raider:pivotTo(cf: CFrame)
