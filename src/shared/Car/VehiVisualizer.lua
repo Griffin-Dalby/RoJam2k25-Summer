@@ -13,6 +13,7 @@
 --]] Services
 local replicatedStorage = game:GetService('ReplicatedStorage')
 local runService = game:GetService('RunService')
+local players = game:GetService('Players')
 
 --]] Modules
 local physItem = require(replicatedStorage.Shared.PhysItem)
@@ -23,6 +24,8 @@ local cdn = sawdust.core.cdn
 local maid = sawdust.core.util.maid
 local signal = sawdust.core.signal
 local caching = sawdust.core.cache
+local services = sawdust.services
+local networking = sawdust.core.networking
 
 --]] Settings
 --]] Constants
@@ -33,6 +36,10 @@ local cdnGame, cdnVFX  = cdn.getProvider('game'), cdn.getProvider('vfx')
 --> Cache groups
 local carSlotCache = caching.findCache('carSlots')
 local physItemCache = caching.findCache('physItems')
+
+--> Networking channels
+local gameChannel = networking.getChannel('game')
+local vehicleChannel = networking.getChannel('vehicle')
 
 --]] Variables
 --]] Functions
@@ -56,6 +63,11 @@ export type CarVisualizer = typeof(setmetatable({} :: self, carVis))
 function carVis.new(uuid: string, spawnOffset: number, buildInfo: {}, buildUuids: {[string]: string}) : CarVisualizer
     local self = setmetatable({} :: self, carVis)
 
+    --> Index player
+    local player = players.LocalPlayer
+    local playerUi = player.PlayerGui:WaitForChild('UI') :: ScreenGui
+    local keybindUi = playerUi:WaitForChild('Keybinds')   :: Frame
+
     --> Setup self
     self.__uuid = uuid
     self.__maid = maid.new()
@@ -71,7 +83,7 @@ function carVis.new(uuid: string, spawnOffset: number, buildInfo: {}, buildUuids
 
     --> Create engine bay
     local engineBayInfo = buildInfo.engineBay
-    local engineInfo, batteryInfo, filterInfo, reservoirInfo =
+    local engineInfo, batteryInfo, filterInfo, reservoirInfo = 
         engineBayInfo.engine, engineBayInfo.battery,
         engineBayInfo.filter, engineBayInfo.reservoir
 
@@ -106,18 +118,30 @@ function carVis.new(uuid: string, spawnOffset: number, buildInfo: {}, buildUuids
         hitboxes[hitboxId] = hitbox
     end
 
+    local engineOlapParams = OverlapParams.new()
     local runtime = runService.Heartbeat:Connect(function(deltaTime)
+        --> Update engine bay
         for hitboxId, item: physItem.PhysicalItem in pairs(mappedHitboxes) do
             local model = item.__itemModel
             local hitboxCf = hitboxes[hitboxId].CFrame :: CFrame
 
             if item.grabbed then --> Remove from engine bay
+                vehicleChannel.fix:with()
+                    :headers('takePart')
+                    :data(hitboxId)
+                    :fire()
+
+                model:AddTag('DontAddToEngine')
+                task.delay(2, function()
+                    model:RemoveTag('DontAddToEngine') end)
+
                 model.PrimaryPart.Anchored = false
                 mappedHitboxes[hitboxId] = nil
                 
                 return
             end
-            item:setTransform({hitboxCf.X, hitboxCf.Y, hitboxCf.Z}, {90, 0, 0}) --> :( Idk abt the rotation
+            model.PrimaryPart.Anchored = true
+            item:setTransform{{hitboxCf.X, hitboxCf.Y, hitboxCf.Z}, {90, 0, 0}} --> :( Idk abt the rotation
             item.isRendered = true
 
             model:PivotTo(hitboxCf * CFrame.Angles(
@@ -128,7 +152,52 @@ function carVis.new(uuid: string, spawnOffset: number, buildInfo: {}, buildUuids
         end
     
         for _, hitbox: Instance in pairs(hitboxes) do
+            --> Check placement
             local hitboxId = hitbox:GetAttribute('hitboxId')
+            if not mappedHitboxes[hitboxId] then
+                local partsIn = workspace:GetPartsInPart(hitbox, engineOlapParams)
+                for _, instance: Instance in pairs(partsIn) do
+                    --> Run checks
+                    local topLayer = instance:FindFirstAncestorWhichIsA('Model')
+                    if not topLayer then continue end
+
+                    local itemUuid = topLayer:GetAttribute('itemUuid')
+                    local itemId = topLayer:GetAttribute('itemId')
+                    if not itemUuid or not itemId then continue end
+
+                    local enginePart = cdnPart:getAsset(itemId)
+                    if not enginePart then continue end
+                    if enginePart.behavior.partType ~= hitboxId then continue end
+
+                    local physPart = physItemCache:getValue(itemUuid) :: physItem.PhysicalItem
+                    if not physPart then continue end
+
+                    --> Add to engine
+                    if physPart.__itemModel:HasTag('DontAddToEngine') then continue end
+
+                    if physPart.grabbed and physPart.grabbed == players.LocalPlayer then
+                        gameChannel.physItem:with()
+                            :headers('drop')
+                            :data{
+                                hitbox.Position,
+                                {linear = Vector3.zero, angular = Vector3.zero}}
+                            :invoke()
+
+                        services:getService('grab').grabbing = false
+                        keybindUi.PickUp.Visible = false
+                        keybindUi.Drop.Visible = false
+                        keybindUi.Use.Visible = false
+
+                        physPart:drop() end
+                    vehicleChannel.fix:with()
+                        :headers('addPart')
+                        :data(hitboxId, physPart.__itemUuid)
+
+                    mappedHitboxes[hitboxId] = physPart
+                end
+            end
+
+            --> Update slots
             if not mappedHitboxes[hitboxId] then
                 --> Missing!
                 hitbox.Transparency = .75
@@ -156,6 +225,7 @@ function carVis.new(uuid: string, spawnOffset: number, buildInfo: {}, buildUuids
 
             local vfx = cdnVFX:getAsset('PartFire').Attachment:Clone()
             vfx.Parent = model.PrimaryPart
+            vfx.Name = `issue.fire`
         end,
 
         ['overheat'] = function(id: string)
@@ -164,6 +234,7 @@ function carVis.new(uuid: string, spawnOffset: number, buildInfo: {}, buildUuids
             
             local vfx = cdnVFX:getAsset('PartSmoke').Attachment:Clone()
             vfx.Parent = model.PrimaryPart
+            vfx.Name = `issue.overheat`
         end
     }
 
@@ -206,8 +277,6 @@ function carVis:updateChassis()
     }
 
     for partId: string, info: {} in pairs(self.buildInfo.chassis) do
-        -- print(partId,':',info.dirty)
-        
         local part = chassisIdToPart[partId] :: BasePart
 
         local surfaceAppearances = {} :: {SurfaceAppearance}

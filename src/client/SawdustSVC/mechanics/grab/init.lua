@@ -17,6 +17,8 @@ local runService = game:GetService('RunService')
 local players = game:GetService('Players')
 
 --]] Modules
+local physItem = require(replicatedStorage.Shared.PhysItem)
+
 local sawdust = require(replicatedStorage.Sawdust)
 local networking = sawdust.core.networking
 local caching = sawdust.core.cache
@@ -259,7 +261,7 @@ return builder.new('grab')
             --> UI
             keybindUi.Grab.Visible = false
 
-            local foundItem = physItems:getValue(itemUuid)
+            local foundItem = physItems:getValue(itemUuid) :: physItem.PhysicalItem
             assert(foundItem, `While attempting to {action}, the targeted item isn't in the cache.`)
 
             targetedPItem = foundItem

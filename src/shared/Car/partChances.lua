@@ -54,7 +54,9 @@ local chances = {
         {'battery.scrappy', 100}
     },
     ['filter'] = {
-        {'filter.scrappy', 100}
+        {'filter.scrappy', 35},
+        {'filter.t1', 40},
+        {'filter.t2', 25},
     },
     ['reservoir'] = {
         {'reservoir.scrappy', 100}

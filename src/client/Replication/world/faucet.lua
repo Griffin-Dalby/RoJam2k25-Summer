@@ -18,6 +18,7 @@ local players = game:GetService('Players')
 --]] Modules
 local sawdust = require(replicatedStorage.Sawdust)
 local networking = sawdust.core.networking
+local caching = sawdust.core.cache
 
 --]] Settings
 --]] Constants
@@ -31,6 +32,9 @@ waterCastParams.FilterDescendantsInstances = {workspace.Gameplay}
 
 --> Networking channels
 local worldChannel = networking.getChannel('world')
+
+--> Cache groups
+local physItems = caching.findCache('physItems')
 
 --]] Variables
 --]] Functions
@@ -56,9 +60,16 @@ local headerHandlers = {
             ) :: RaycastResult
             if not raycast then return end
             if raycast then
-                local instance = raycast.Instance
+                local hitLayer = raycast.Instance
+                local topLayer = hitLayer:FindFirstAncestorWhichIsA('Model')
+                local instance = topLayer:GetAttribute('itemUuid') and topLayer or (hitLayer:GetAttribute('itemUuid') and hitLayer or hitLayer)
+
                 local uuid, id = instance:GetAttribute('itemUuid'), instance:GetAttribute('itemId')
                 if not uuid or not id then return end
+
+                local physItem = physItems:getValue(uuid)
+                if not physItem then return end
+                if not physItem.grabbed or physItem.grabbed ~= players.LocalPlayer then return end
 
                 worldChannel.faucet:with()
                     :headers('wet')

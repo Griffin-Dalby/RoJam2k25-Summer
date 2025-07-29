@@ -21,6 +21,7 @@ local carSlot = require(replicatedStorage.Shared.CarSlot)
 local sawdust = require(replicatedStorage.Sawdust)
 
 local caching = sawdust.core.cache
+local networking = sawdust.core.networking
 
 --]] Settings
 --> Spawn Rate (Cubic)
@@ -35,6 +36,9 @@ local slotCount = #slotFolder:GetChildren()
 --]] Constants
 --> Caches
 local carSlotCache = caching.findCache('carSlots')
+
+--> Networking Channels
+local vehicleChannel = networking.getChannel('vehicle')
 
 --]] Variables
 local spawnInterval = spawn_baseInterval

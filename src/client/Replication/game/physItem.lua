@@ -22,7 +22,7 @@ local caching = sawdust.core.cache
 local physItem = require(replicatedStorage.Shared.PhysItem)
 
 --]] Settings
-local logging = true
+local logging = false
 
 --]] Constants
 local physItemCache = caching.findCache('physItems')

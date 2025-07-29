@@ -78,7 +78,7 @@ return sawdust.builder.new('camera')
 
     :method('putArm', function(self, castResult: RaycastResult)
         if self.physDragging then
-            warn(`[{script.Name}] Attempt to internally physDrag while already doing so!`)
+            warn(`[{script.Name}] Attempt to externally physDrag while already doing so!`)
             return end
         if self.debounce then return end
         self.debounce = true
@@ -119,7 +119,7 @@ return sawdust.builder.new('camera')
         local constraintOrVelo
         local veloConnection
         
-        local lockHood = hitInstance:HasTag('Hood') and true or false
+        local isHood = hitInstance:HasTag('Hood') and true or false
 
         if isHinge then
             hinge = topLevel:FindFirstChildWhichIsA('HingeConstraint') :: HingeConstraint
@@ -128,9 +128,12 @@ return sawdust.builder.new('camera')
             local hingePart = hinge.Attachment0.Parent :: BasePart
             local doorPart  = hinge.Attachment1.Parent :: BasePart
 
-            if lockHood then
+            if isHood then
                 hinge.UpperAngle = vehicleBase.Hood.Hinge.UpperAngle
                 hinge.LowerAngle = vehicleBase.Hood.Hinge.LowerAngle
+            else
+                hinge.UpperAngle = vehicleBase.DriverDoor.Hinge.UpperAngle
+                hinge.LowerAngle = vehicleBase.DriverDoor.Hinge.LowerAngle
             end
 
             constraintOrVelo = Instance.new('BodyAngularVelocity')
@@ -208,8 +211,9 @@ return sawdust.builder.new('camera')
         self.__maid:add(goalPart)
 
         self.__maid:add(function()
-            if lockHood and hinge.CurrentAngle>math.rad(30) then
+            if (isHood and hinge.CurrentAngle>math.rad(30)) or (not isHood and isHinge) then
                 hinge.LimitsEnabled = true
+                
                 hinge.UpperAngle = hinge.CurrentAngle+math.rad(5)
                 hinge.LowerAngle = hinge.CurrentAngle-math.rad(5)
             end

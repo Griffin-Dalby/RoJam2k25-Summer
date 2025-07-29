@@ -136,6 +136,16 @@ function car.new(uuid: string, spawnOffset: number, buildInfo: {}, buildUuids: {
         local filterPart = physItems.new(engineBay.filter[1])
         local reservoirPart = physItems.new(engineBay.reservoir[1])
 
+        for partId: string, part: physItems.PhysicalItem in pairs{engine=enginePart,battery=batteryPart,filter=filterPart,reservoir=reservoirPart} do
+            local chances = self.build.engineBay[partId]
+            local issues = chances[2]
+
+            for issueId: string, state: boolean in pairs(issues) do
+                if not state then continue end
+                part:addTag(`issue.{issueId}`)
+            end
+        end
+
         --> Replicate & save
         gameChannel.vehicle:with()
             :broadcastGlobally()
@@ -144,22 +154,13 @@ function car.new(uuid: string, spawnOffset: number, buildInfo: {}, buildUuids: {
                 {enginePart.__itemUuid, batteryPart.__itemUuid,
                  filterPart.__itemUuid, reservoirPart.__itemUuid, })
             :fire()
-
-        local function replicatePart(itemId, itemUuid)
-            gameChannel.physItem:with()
-                :broadcastGlobally()
-                :headers('create')
-                :data{itemId, itemUuid}
-                :fire()
-        end
-
-        -- replicatePart(engineBay.engine[1], enginePart.__itemUuid) --> Now replicate them
-        -- replicatePart(engineBay.battery[1], batteryPart.__itemUuid)
-        -- replicatePart(engineBay.filter[1], filterPart.__itemUuid)
-        -- replicatePart(engineBay.reservoir[1], reservoirPart.__itemUuid)
+        
+        engineBay.engine = enginePart
+        engineBay.battery = batteryPart
+        engineBay.filter = filterPart
+        engineBay.reservoir = reservoirPart
 
         self.raider = raider.new(self.uuid)
-
         vehicleCache:setValue(self.uuid, self)
         return self
     end

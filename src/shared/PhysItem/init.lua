@@ -24,8 +24,6 @@ local networking = sawdust.core.networking
 local caching = sawdust.core.cache
 local cdn = sawdust.core.cdn
 
-local signal = sawdust.core.signal
-
 --]] Settings
 local itemDropDistance = 10
 local itemHoldDistance = 5
@@ -63,6 +61,8 @@ type self = {
         rotation: {[number]: number}?
     },
 
+    tags: {[string]: boolean},
+
     isRendered: boolean,
 
     grabbed: boolean,
@@ -88,6 +88,8 @@ function physItem.new(itemId: string, itemUuid: string) : PhysicalItem
         position = {0, 0, 0},
         rotation = {0, 0, 0}
     }
+
+    self.tags = {}
 
     self.grabbed = false
     self.using = false
@@ -429,7 +431,7 @@ function physItem:setWetness(wetness: number)
     end
     
     --> VFX Checks
-    local dripThreshold = 10
+    local dripThreshold = 25
 
     if wetness > dripThreshold then --> Threshold for drip VFX (scale amount of drips w/ wetness)
         if not self.dripEffect then
@@ -445,6 +447,24 @@ function physItem:setWetness(wetness: number)
         end
     end
 
+    --> Enginebay Issues
+    if self:hasTag('issue.overheat') and wetness > 35 then
+        self:removeTag('issue.overheat')
+        local primaryPart = self.__itemModel:IsA('Model') and self.__itemModel.PrimaryPart or self.__itemModel
+        local overheatFX = primaryPart:FindFirstChild('issue.overheat') :: Attachment
+        if overheatFX and not overheatFX:HasTag('QueuedForDestruction') then
+            overheatFX:AddTag('QueuedForDestruction')
+            
+            for _, fx: ParticleEmitter in pairs(overheatFX:GetDescendants()) do
+                if not fx:IsA('ParticleEmitter') then continue end
+                fx.Enabled = false
+            end
+            task.delay(3, function()
+                overheatFX:Destroy()
+            end)
+        end
+    end
+
     --> Set colors
     local function applyWetnessToPart(part)
         if not part:GetAttribute('OriginalColor') then
@@ -453,7 +473,7 @@ function physItem:setWetness(wetness: number)
 
         local origColor = part:GetAttribute('OriginalColor')
 
-        local maxDarken = .6
+        local maxDarken = .45
         local darkenFac = (wetness/100)*maxDarken
 
         part.Color = Color3.new(
@@ -474,6 +494,16 @@ function physItem:setWetness(wetness: number)
         error(`[{script.Name}] Can't darken item colors because it's unsupported!`)
     end
 end
+
+--[[ TAGS ]]--
+function physItem:addTag(tag: string)
+    self.tags[tag] = true end
+function physItem:removeTag(tag: string)
+    self.tags[tag] = nil end
+function physItem:hasTag(tag: string)
+    return self.tags[tag] == true end
+function physItem:getTags()
+    return self.tags end
 
 --[[ TRANSFORM ]]--
 function physItem:setTransform(transform: {position: {}, rotation: {}})

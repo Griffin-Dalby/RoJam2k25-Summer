@@ -75,6 +75,28 @@ local headerHandlers = {
             :headers('updateChassis')
             :data(vehicle.uuid, translator[cleanPart], partInfo)
             :fire()
+    end,
+
+    ['takePart'] = function(caller: Player, vehicle: car.Car, partId: string)
+        local callerTag = `{caller.Name}.{caller.UserId}`
+        local partInBay = vehicle.build.engineBay[partId]
+        if not partInBay then
+            warn(`[{script.Name}] Player ({callerTag}) attempted to take a {partId} from the bay, which isn't there!`)
+            return end
+
+        vehicle.build.engineBay[partId] = nil
+        print('success')
+    end,
+    ['putPart'] = function(caller: Player, vehicle: car.Car, partId: string, itemUuid: string)
+        local callerTag = `{caller.Name}.{caller.UserId}`
+
+        local physItem = physItems:getValue(itemUuid) :: physItem.PhysicalItem
+        if not physItem then
+            warn(`[{script.Name}] Player ({callerTag}) attempted to put an unregistered part in the engine bay!`)
+            return end
+
+        vehicle.build.engineBay[partId] = physItem
+        print('success')
     end
 }
 
