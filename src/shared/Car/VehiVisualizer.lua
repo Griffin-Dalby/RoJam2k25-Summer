@@ -128,7 +128,7 @@ function carVis.new(uuid: string, spawnOffset: number, buildInfo: {}, buildUuids
             if item.grabbed then --> Remove from engine bay
                 vehicleChannel.fix:with()
                     :headers('takePart')
-                    :data(hitboxId)
+                    :data(self.__uuid, hitboxId)
                     :fire()
 
                 model:AddTag('DontAddToEngine')
@@ -191,7 +191,8 @@ function carVis.new(uuid: string, spawnOffset: number, buildInfo: {}, buildUuids
                         physPart:drop() end
                     vehicleChannel.fix:with()
                         :headers('addPart')
-                        :data(hitboxId, physPart.__itemUuid)
+                        :data(self.__uuid, hitboxId, physPart.__itemUuid)
+                        :fire()
 
                     mappedHitboxes[hitboxId] = physPart
                 end

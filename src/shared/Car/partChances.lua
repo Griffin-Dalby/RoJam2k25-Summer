@@ -51,7 +51,9 @@ local chances = {
         {'engine.v8', 5},
     },
     ['battery'] = {
-        {'battery.scrappy', 100}
+        {'battery.scrappy', 40},
+        {'battery.t1', 30},
+        {'battery.t2', 10}
     },
     ['filter'] = {
         {'filter.scrappy', 35},
