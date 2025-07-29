@@ -55,10 +55,16 @@ function openUi()
     currentUi.Name = `computer.{https:GenerateGUID(false)}`
     currentUi.Parent = playerUi
     currentUi.Enabled = true
+
+    return function()
+        conn:Disconnect()
+        conn = nil
+
+        userInputService.MouseBehavior = Enum.MouseBehavior.LockCenter
+    end
 end
 
 function closeUi()
-    userInputService.MouseBehavior = Enum.MouseBehavior.LockCenter
     if currentUi then
         currentUi:Destroy()
     end
@@ -66,7 +72,9 @@ end
 
 --]] Script
 prompt.Triggered:Connect(function() --> Open UI
-    openUi()
-
-    humanoid.Jumping:Once(closeUi) --> Close UI
+    local cleanup = openUi()
+    humanoid.Jumping:Once(function()
+        cleanup()
+        closeUi()
+    end) --> Close UI
 end)

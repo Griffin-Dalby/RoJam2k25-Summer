@@ -189,7 +189,7 @@ function carVis.new(uuid: string, spawnOffset: number, buildInfo: {}, buildUuids
                         keybindUi.Use.Visible = false
 
                         physPart:drop() end
-                    print(physPart:getTags())
+                        
                     vehicleChannel.fix:with()
                         :headers('putPart')
                         :data(self.__uuid, hitboxId, physPart.__itemUuid)

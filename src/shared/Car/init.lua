@@ -33,6 +33,24 @@ local dirtyRanges = {
 
 }
 
+local partSpawns = {
+    ['engine'] = {
+        {'engine.scrappy', 70},
+        {'engine.v4', 30},
+    },
+    ['battery'] = {
+        {'battery.scrappy', 60},
+        {'battery.t1', 40},
+    },
+    ['filter'] = {
+        {'filter.scrappy', 50},
+        {'filter.t1', 50},
+    },
+    ['reservoir'] = {
+        {'reservoir.scrappy', 100}
+    }
+}
+
 --]] Constants
 local isServer = runService:IsServer()
 
@@ -106,6 +124,7 @@ function car.new(uuid: string, spawnOffset: number, buildInfo: {}, buildUuids: {
         }
     end
 
+    --> Generate build
     self.build = isServer and {
         chassis = {
             chassis = generateChassisBuild('chassis'),
@@ -146,6 +165,47 @@ function car.new(uuid: string, spawnOffset: number, buildInfo: {}, buildUuids: {
             end
         end
 
+        --> Create new scrap parts
+        local spawnParts = {
+            engine = math.random(1,2),
+            battery = math.random(1,2),
+            filter = math.random(1,2),
+            reservoir = math.random(1,2)
+        } :: {[number]: string}
+        local function randomPart(partType: string)
+            local chances = partSpawns[partType]
+            local weight = 0
+            for i=1,#chances do
+                weight = weight+chances[i][2] end
+            local roll = math.random(1, weight)
+
+            weight = 0
+            for i=1,#chances do
+                weight = weight+chances[i][2]
+                if roll < weight then
+                    return chances[i][1]
+                end
+            end
+        end
+
+        for id, amount in pairs(spawnParts) do
+            local part = physItems.new(randomPart(id))
+
+            local spawnAreas = workspace.Gameplay.PartSpawns
+            local areaChildren = spawnAreas:GetChildren()
+            local chosenArea = areaChildren[math.random(1, #areaChildren)]
+
+            local rng = Random.new()
+            local x = rng:NextNumber(-chosenArea.Size.X/2, chosenArea.Size.X/2)
+            local y = rng:NextNumber(-chosenArea.Size.Y/2, chosenArea.Size.Y/2)
+            local z = rng:NextNumber(-chosenArea.Size.Z/2, chosenArea.Size.Z/2)
+
+            part:putItem(
+                {chosenArea.Position.X+x, chosenArea.Position.Y+y, chosenArea.Position.Z+z},
+                {math.random(-360, 360), math.random(-360, 360), math.random(-360, 360)}
+            )
+        end
+        
         --> Replicate & save
         gameChannel.vehicle:with()
             :broadcastGlobally()
