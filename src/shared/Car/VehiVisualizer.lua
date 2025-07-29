@@ -189,8 +189,9 @@ function carVis.new(uuid: string, spawnOffset: number, buildInfo: {}, buildUuids
                         keybindUi.Use.Visible = false
 
                         physPart:drop() end
+                    print(physPart:getTags())
                     vehicleChannel.fix:with()
-                        :headers('addPart')
+                        :headers('putPart')
                         :data(self.__uuid, hitboxId, physPart.__itemUuid)
                         :fire()
 
@@ -226,7 +227,8 @@ function carVis.new(uuid: string, spawnOffset: number, buildInfo: {}, buildUuids
 
             local vfx = cdnVFX:getAsset('PartFire').Attachment:Clone()
             vfx.Parent = model.PrimaryPart
-            vfx.Name = `issue.fire`
+            vfx.Name =  `issue.fire`
+            item:addTag('issue.fire')
         end,
 
         ['overheat'] = function(id: string)
@@ -235,7 +237,8 @@ function carVis.new(uuid: string, spawnOffset: number, buildInfo: {}, buildUuids
             
             local vfx = cdnVFX:getAsset('PartSmoke').Attachment:Clone()
             vfx.Parent = model.PrimaryPart
-            vfx.Name = `issue.overheat`
+            vfx.Name =  `issue.overheat`
+            item:addTag('issue.overheat')
         end
     }
 

@@ -74,6 +74,7 @@ return builder.new('grab')
     end)
 
     :start(function(self, deps)
+
         --[[ CHARACTER ]]--
         local character = player.Character or player.CharacterAdded:Wait()
         local rootPart = character:WaitForChild('HumanoidRootPart')
@@ -81,9 +82,12 @@ return builder.new('grab')
         local playerUi = player.PlayerGui:WaitForChild('UI') :: ScreenGui
         local keybindUi = playerUi:WaitForChild('Keybinds')   :: Frame
 
+        player:GetMouse().Icon = 'http://www.roblox.com/asset/?id=417446600'
+
         --[[ TARGETER ]]--
         self.runtimes = {}
         self.runtimes.targeter = runService.Heartbeat:Connect(function()
+
             if self.grabbing then return end
 
             --> Get viewport size

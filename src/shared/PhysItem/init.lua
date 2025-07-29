@@ -420,6 +420,27 @@ function physItem:setWetness(wetness: number)
     if wetness==self.wetness then return end
     self.wetness = wetness
 
+    --> Enginebay Issues
+    if self:hasTag('issue.overheat') and wetness > 35 then
+        self:removeTag('issue.overheat')
+        
+        if not isServer then
+            local primaryPart = self.__itemModel:IsA('Model') and self.__itemModel.PrimaryPart or self.__itemModel
+            local overheatFX = primaryPart:FindFirstChild('issue.overheat') :: Attachment
+            if overheatFX and not overheatFX:HasTag('QueuedForDestruction') then
+                overheatFX:AddTag('QueuedForDestruction')
+                
+                for _, fx: ParticleEmitter in pairs(overheatFX:GetDescendants()) do
+                    if not fx:IsA('ParticleEmitter') then continue end
+                    fx.Enabled = false
+                end
+                task.delay(3, function()
+                    overheatFX:Destroy()
+                end)
+            end
+        end
+    end
+
     if isServer then
         gameChannel.physItemReplication:with()
             :broadcastGlobally()
@@ -444,24 +465,6 @@ function physItem:setWetness(wetness: number)
         if self.dripEffect then
             self.dripEffect:Destroy()
             self.dripEffect=nil
-        end
-    end
-
-    --> Enginebay Issues
-    if self:hasTag('issue.overheat') and wetness > 35 then
-        self:removeTag('issue.overheat')
-        local primaryPart = self.__itemModel:IsA('Model') and self.__itemModel.PrimaryPart or self.__itemModel
-        local overheatFX = primaryPart:FindFirstChild('issue.overheat') :: Attachment
-        if overheatFX and not overheatFX:HasTag('QueuedForDestruction') then
-            overheatFX:AddTag('QueuedForDestruction')
-            
-            for _, fx: ParticleEmitter in pairs(overheatFX:GetDescendants()) do
-                if not fx:IsA('ParticleEmitter') then continue end
-                fx.Enabled = false
-            end
-            task.delay(3, function()
-                overheatFX:Destroy()
-            end)
         end
     end
 
