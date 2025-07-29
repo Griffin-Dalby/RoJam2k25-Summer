@@ -141,6 +141,14 @@ function physItem:drop(position: Vector3?, velocity: {linear: Vector3?, angular:
         self.grabUpdater:Disconnect()
         self.grabUpdater = nil end
 
+    if self.__itemModel:IsA('Model') then
+        for _, part: BasePart in pairs(self.__itemModel:GetDescendants()) do
+            if not part:IsA('BasePart') then continue end
+            part.CollisionGroup = 'Default' end
+    else
+        self.__itemModel.CollisionGroup = 'Default'
+    end
+
     --> Destroy drag constraints
     assert(self.grabConstraints, `Missing grab constraints!`)
     self.grabConstraints.goalPart:Destroy()
@@ -194,6 +202,13 @@ function physItem:grab(grabbingPlayer: Player, callback: (external: true) -> nil
     goalPart.Name = `dragGoalPart.{self.__itemUuid:sub(1,8)}}`
 
     local targetedItem = self.__itemModel
+    if targetedItem:IsA('Model') then
+        for _, part: BasePart in pairs(targetedItem:GetDescendants()) do
+            if not part:IsA('BasePart') then continue end
+            part.CollisionGroup = 'Grabbed' end
+    else
+        targetedItem.CollisionGroup = 'Grabbed' end
+
     local itemAttachment, goalAttachment = Instance.new('Attachment'), Instance.new('Attachment')
     itemAttachment.Name, goalAttachment.Name = 'itemAttach', 'goalAttach'
     itemAttachment.Parent, goalAttachment.Parent =
