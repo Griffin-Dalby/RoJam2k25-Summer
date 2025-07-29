@@ -247,6 +247,7 @@ function car:getRaider(): raider.Raider
 --[[ car:setBay(bayId: number)
     Sets the internal bay ID value. ]]
 function car:setBay(bayId: number)
+    print(bayId)
     self.bayId = bayId end
 
 --[[ car:hasRaider(raider: Raider)

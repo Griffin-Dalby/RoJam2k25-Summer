@@ -25,14 +25,22 @@ local worldChannel = networking.getChannel('world')
 
 --> Caching groups
 local physItems = caching.findCache('physItems')
+local playerCache = caching.findCache('players')
 
 --]] Variables
 --]] Functions
 --]] Script
 local headerHandlers = {
-    ['use'] = function(itemUuid: string)
+    ['use'] = function(caller: Player, itemUuid: string)
         local thisItem = physItems:getValue(itemUuid) :: physItem.PhysicalItem
+        if not thisItem then
+            warn(`[{script.Name}] Player ({caller.Name}.{caller.UserId}) attempted to scrap unregistered item!`)
+            return false end
+
         thisItem:destroy()
+
+        local playerData = playerCache:findTable(caller) --> TODO: Add scraps
+        local currentScraps = playerData:getValue('scraps')
 
         return true
     end

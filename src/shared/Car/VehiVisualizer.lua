@@ -331,8 +331,6 @@ function carVis:__start_driving(spawnPosition: Vector3)
     local currentPhase = 'approaching' :: 'approaching'|'turning'|'queueing'
     local startTime = tick()
 
-    local vehicle = vehicleCache:getValue(self.__uuid)
-
     local function handlePos(position: Vector3)
         return Vector3.new(
             position.X,
@@ -456,7 +454,11 @@ function carVis:__start_driving(spawnPosition: Vector3)
             self.model:PivotTo(CFrame.new(handlePos(finalCFrame.Position), handlePos(finalCFrame.Position + lookDirection)) * CFrame.Angles(math.rad(-90), math.rad(180), 0):Inverse())
         end
         elseif currentPhase == 'queueing' then
+            local vehicle = vehicleCache:getValue(self.__uuid)
+
             local slotIndex, slotPosition = getAvailableSlot()
+            vehicle:setBay(slotIndex)
+
             local queueDistance = (slotPosition - spawnPosition).Magnitude
             local queueTime = queueDistance / 25
             

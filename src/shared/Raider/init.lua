@@ -350,15 +350,16 @@ function raider.new(uuid: string, outfitId: number, headId: number, skinTone: Co
     local raiderTemplate = playerUi.Templates.RaiderSlot:Clone()
     raiderTemplate.RaiderName.Text = `{firstName} {lastName:sub(1,1):upper()}.`
     
-    local bayId = vehicle:getBay()
-    
     local templateModel = self.model:Clone()
     templateModel:PivotTo(CFrame.new(0, 0, 0))
     templateModel.Parent = raiderTemplate.Viewport
 
     local patienceMeter = runService.Heartbeat:Connect(function(dT)
         if not self.patience then return end
-        raiderTemplate.Patience.Bar.Size = UDim2.new(self.patience/self.maxPatience, 0, 1, 0)
+        local bayId = vehicle:getBay()
+        if bayId then
+            raiderTemplate.Viewport.BayID.Text = `Bay {bayId}` end
+        raiderTemplate.Patience.Bar.Size = UDim2.new(math.max(self.patience/self.maxPatience, 0), 0, 1, 0)
 
         self.patience -= dT --> Accurate second timer
         if self.patience <= 0 then
