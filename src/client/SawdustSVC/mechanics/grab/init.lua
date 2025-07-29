@@ -124,6 +124,7 @@ return builder.new('grab')
         
             if not closest[2] then
                 keybindUi.Grab.Visible = false
+                targetedItem, targetedPItem = nil, nil
                 return end
                 
             if not keybindUi.Visible or targetedItem~=closest[2] then

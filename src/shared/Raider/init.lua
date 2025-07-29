@@ -12,7 +12,9 @@
 
 --]] Services
 local replicatedStorage = game:GetService('ReplicatedStorage')
+local userInputService = game:GetService('UserInputService')
 local runService = game:GetService('RunService')
+local players = game:GetService('Players')
 local https = game:GetService('HttpService')
 
 --]] Modules
@@ -176,6 +178,62 @@ local skinTones = {
     },
 }
 
+local raider_first_names = {
+    "Axe", "Blade", "Crank", "Diesel", "Edge", "Flint", "Grease", "Hammer", 
+    "Iron", "Junk", "Knox", "Lead", "Mad", "Nails", "Oil", "Pike", "Quake", 
+    "Rust", "Steel", "Tank", "Volt", "Wreck", "Zap", "Ash", "Bone", "Crow", 
+    "Dagger", "Echo", "Fang", "Grit", "Hawk", "Ice", "Jag", "Kilo", "Lynch", 
+    "Meat", "Nitro", "Ox", "Phantom", "Quarry", "Raven", "Spike", "Torch", 
+    "Viper", "Wolf", "Zero", "Blaze", "Clutch", "Doom", "Engine", "Fire", 
+    "Ghost", "Haze", "Ink", "Jinx", "Knife", "Lash", "Motor", "Needle", 
+    "Onyx", "Piston", "Quest", "Razor", "Scar", "Turbo", "Venom", "Wire", 
+    "X-Ray", "Yard", "Zone", "Acid", "Bullet", "Chain", "Death", "Ember", 
+    "Forge", "Grim", "Hunter", "Iron", "Jack", "Killer", "Lightning", "Max", 
+    "Nero", "Outlaw", "Prowl", "Quick", "Rage", "Savage", "Thunder", "Vex", 
+    "War", "Xerx", "Yank", "Zed", "Bandit", "Crash", "Drake", "Exile", 
+    "Flash", "Gunner", "Havoc", "Impact", "Jet", "Knux", "Lynx", "Mace", 
+    "Nomad", "Outcast", "Pulse", "Reaper", "Storm", "Tyrant", "Virus", "Wasp", 
+    "Xen", "Yoke", "Zulu", "Beast", "Colt", "Demon", "Eclipse", "Fury", 
+    "Grave", "Hex", "Inferno", "Jagged", "Kraken", "Locust", "Mauler", "Nova", 
+    "Oracle", "Phantom", "Quiver", "Rogue", "Scythe", "Titan", "Vortex", "Wrath"
+}
+
+local raider_last_names = {
+    "Axebreaker", "Bonecrusher", "Carjacker", "Deathdealer", "Enginekiller", "Furiosa", 
+    "Gasburner", "Headhunter", "Ironwolf", "Junkyard", "Killswitch", "Leadfoot", 
+    "Meatgrinder", "Nitrous", "Oilspill", "Pistonhead", "Quickdraw", "Rustbucket", 
+    "Steelclaw", "Turbocharged", "Venomfang", "Wasteland", "Xerxes", "Yellowjacket", 
+    "Zombiekiller", "Bloodspiller", "Crowbar", "Doomrider", "Exhaustpipe", "Flamethrower", 
+    "Gutripper", "Hellraiser", "Interceptor", "Jackhammer", "Knifeedge", "Lockjaw", 
+    "Motorhead", "Nightrider", "Overkill", "Painkiller", "Quarterpounder", "Roadwarrior", 
+    "Skullcrusher", "Thunderdome", "Ultraviolence", "Vehicular", "Warboy", "Xterminator", 
+    "Yarddog", "Zerotolerance", "Accelerator", "Bladerunner", "Chainsmoker", "Darkrider", 
+    "Electricchair", "Firestarter", "Gravedigger", "Hammerfall", "Ironfist", "Jawbreaker", 
+    "Knuckleduster", "Lawbreaker", "Machinegun", "Nukular", "Offroad", "Powerhouse", 
+    "Quicksilver", "Rampage", "Shotgun", "Tankbuster", "Undertaker", "Vulture", 
+    "Warpath", "Xtreme", "Yardstick", "Zerosum", "Backstabber", "Crowkiller", "Dustdevil", 
+    "Enginebay", "Fastlane", "Gasoline", "Hardtop", "Ignition", "Jumpstart", "Knockout", 
+    "Lowrider", "Mudflap", "Neckbreaker", "Overdrive", "Pitbull", "Quartermile", "Roadkill", 
+    "Supercharged", "Tailpipe", "Unleaded", "Vroom", "Whiplash", "Xenophobic", "Yellowline", 
+    "Zoomzoom", "Axegrinder", "Boltcutter", "Chromedome", "Dieselfumes", "Exhausted", 
+    "Fuelinjected", "Gearshift", "Horsepowered", "Intake", "Junkheap", "Kickstart", 
+    "Liftedtruck", "Mudtires", "Noslick", "Octane", "Pumpgas", "Quarterpanel", "Revlimiter", 
+    "Straightpipe", "Torque", "Unleashed", "Vtec", "Wideopen", "Exhaustnote", "Yolowagon", 
+    "Zeroemissions"
+}
+
+local intro_quotes = {
+    'Yeah, what now?', 'What do you need from me?', 'Why are you bothering me? Aren\'t you supposed to be busy?',
+    'Go do your job, I don\'t want to talk to you.', 'What? My car isn\'t going to fix itself?', 'What do you want?',
+    'What could it possibly be now?', 'I don\'t have time to converse with you.', 'I came in for a car repair, not a chat over coffee.',
+}
+
+local moods = {
+    'patient',
+    'impatient',
+    'violent',
+}
+
 --]] Constants
 local isServer = runService:IsServer()
 
@@ -201,14 +259,20 @@ end
 local raider = {}
 raider.__index = raider
 
-type self = {}
+type self = {
+    uuid: string,
+    mood: string,
+
+    model: Model?,
+}
 export type Raider = typeof(setmetatable({} :: self, raider))
 
-function raider.new(uuid: string, outfitId: number, headId: number, skinTone: Color3): Raider
+function raider.new(uuid: string, outfitId: number, headId: number, skinTone: Color3, name: {}, mood: string): Raider
     local self = setmetatable({} :: self, raider)
 
     --[[ SETUP SELF ]]--
     self.uuid = uuid
+    self.mood = isServer and moods[math.random(1, #moods)] or mood
 
     if isServer then
         --[[ SERVER ]]--
@@ -218,10 +282,14 @@ function raider.new(uuid: string, outfitId: number, headId: number, skinTone: Co
         local toneRange = skinTones[math.random(1, #skinTones)]
         local skinTone  = randomColor(toneRange.min, toneRange.max)
 
+        local name = {
+            raider_first_names[math.random(1, #raider_first_names)], 
+            raider_last_names[math.random(1, #raider_last_names)]}
+
         gameChannel.raider:with()
             :broadcastGlobally()
             :headers('create')
-            :data(self.uuid, outfitId, headId, skinTone)
+            :data(self.uuid, outfitId, headId, skinTone, name)
             :fire()
 
         return self
@@ -260,6 +328,65 @@ function raider.new(uuid: string, outfitId: number, headId: number, skinTone: Co
     bodyColors.LeftArmColor3, bodyColors.RightArmColor3 = skinTone, skinTone
     bodyColors.LeftLegColor3, bodyColors.RightLegColor3 = skinTone, skinTone
     bodyColors.Parent = self.model
+
+    local firstName, lastName = unpack(name)
+
+    --> Interaction
+    local prompt = Instance.new('ProximityPrompt')
+    prompt.ObjectText = 'Raider'
+    prompt.ActionText = 'Interact'
+    prompt.Parent = self.model
+
+    prompt.Triggered:Connect(function(playerWhoTriggered)
+        prompt.Enabled = false
+
+        local playerUi = playerWhoTriggered.PlayerGui
+        local raiderInteraction = playerUi.UI.RaiderInteraction:Clone() :: Frame
+        raiderInteraction.Name = `interaction_{firstName}.{lastName}`
+
+        local viewmodel = self.model:Clone()
+        viewmodel:pivotTo(CFrame.new(0, 0, 0))
+        viewmodel.Parent = raiderInteraction.Quote.RaiderProfile.Image.RaiderViewport
+
+        raiderInteraction.Quote.RaiderName.Text = `{firstName} {lastName}`
+        raiderInteraction.Quote.QuoteBox.Text = intro_quotes[math.random(1, #intro_quotes)]
+
+        raiderInteraction.Parent = playerUi.UI
+        raiderInteraction.Visible = true
+
+        local interactionRuntime = runService.Heartbeat:Connect(function()
+            userInputService.MouseBehavior = Enum.MouseBehavior.Default
+        end)
+        local doneConnection, exitConnection
+
+        local function cleanup()
+            if interactionRuntime then
+                interactionRuntime:Disconnect()
+                interactionRuntime = nil end
+
+            raiderInteraction:Destroy()
+            userInputService.MouseBehavior = Enum.MouseBehavior.LockCenter
+            task.delay(1, function()
+                prompt.Enabled = true
+            end)
+
+            if exitConnection then
+                exitConnection:Disconnect()
+                exitConnection = nil end
+            if doneConnection then
+                doneConnection:Disconnect()
+                doneConnection = nil end
+        end
+
+        doneConnection = raiderInteraction.Interactions.Done.Button.MouseButton1Down:Once(function()
+            raiderInteraction.Interactions.Visible = false
+
+            task.delay(2, function()
+                cleanup()
+            end)
+        end)
+        exitConnection = raiderInteraction.Interactions.Exit.Button.MouseButton1Down:Once(cleanup)
+    end)
 
     self.model.Name = `raider_{uuid}`
     self.model.Parent = workspace.__temp

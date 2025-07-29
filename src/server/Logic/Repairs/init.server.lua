@@ -85,7 +85,6 @@ local headerHandlers = {
             return end
 
         vehicle.build.engineBay[partId] = nil
-        print('success')
     end,
     ['putPart'] = function(caller: Player, vehicle: car.Car, partId: string, itemUuid: string)
         local callerTag = `{caller.Name}.{caller.UserId}`
@@ -96,7 +95,6 @@ local headerHandlers = {
             return end
 
         vehicle.build.engineBay[partId] = physItem
-        print('success')
     end
 }
 
