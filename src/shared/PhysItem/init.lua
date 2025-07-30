@@ -423,6 +423,7 @@ end
 function physItem:use(isUsing: boolean)
     if isServer then return end
     if not self.grabbed or self.grabbed~=players.LocalPlayer then return end
+    if not self.__itemAsset.behavior.startUsing or not self.__itemAsset.behavior.stopUsing then return end
     
     self.using = isUsing
 

@@ -46,7 +46,6 @@ local function loadPlayerData(player: Player)
 	local playerData = playerCache:createTable(player)
 
 	--> Session data
-	playerData:setValue('scraps', 0)
 	playerData:setValue('inventory', {})
 
 	--> Persistent data

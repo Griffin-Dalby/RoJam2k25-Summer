@@ -65,6 +65,17 @@ local carSlotCache = caching.findCache('carSlots')
 
 --]] Variables
 --]] Functions
+local function deepCopy(original)
+    if type(original) ~= "table" then
+        return original end
+    
+    local copy = {}
+    for key, value in pairs(original) do
+        copy[key] = deepCopy(value) end
+    
+    return copy
+end
+
 --]] Module
 local car = {}
 car.__index = car
@@ -151,6 +162,8 @@ function car.new(uuid: string, spawnOffset: number, buildInfo: {}, buildUuids: {
         local xOffset = math.random(-spawnStrip.Size.X/2, spawnStrip.Size.X/2)
         
         --> Register parts as physItems
+        self.origIssues = deepCopy(self.build)
+
         local engineBay = self.build.engineBay
 
         local enginePart = physItems.new(engineBay.engine[1])

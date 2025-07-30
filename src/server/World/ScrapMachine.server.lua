@@ -26,7 +26,7 @@ local gameChannel = networking.getChannel('game')
 
 --> Caching groups
 local physItems = caching.findCache('physItems')
-local playerCache = caching.findCache('players')
+local gameCache = caching.findCache('game')
 
 --]] Variables
 --]] Functions
@@ -42,16 +42,14 @@ local headerHandlers = {
 
         thisItem:destroy()
 
-        local playerData = playerCache:findTable(caller) --> TODO: Add scraps
-        local currentScraps = playerData:getValue('scraps')
-
+        local currentScraps = gameCache:getValue('scraps')
         local scrapPriceRng = thisItem.__itemAsset.stats.scrapPrice
-        playerData:setValue('scraps', currentScraps+math.random(scrapPriceRng[1], scrapPriceRng[2]))
+        gameCache:setValue('scraps', currentScraps+math.random(scrapPriceRng[1], scrapPriceRng[2])) --> TODO: Scale w/ players in game
 
         gameChannel.scraps:with()
-            :broadcastTo{caller}
+            :broadcastGlobally()
             :headers('set')
-            :data(playerData:getValue('scraps'))
+            :data(gameCache:getValue('scraps'))
             :fire()
 
         return true

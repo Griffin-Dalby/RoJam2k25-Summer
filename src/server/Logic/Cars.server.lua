@@ -36,6 +36,7 @@ local slotCount = #slotFolder:GetChildren()
 --]] Constants
 --> Caches
 local carSlotCache = caching.findCache('carSlots')
+local gameCache = caching.findCache('game')
 
 --> Networking Channels
 local vehicleChannel = networking.getChannel('vehicle')
@@ -69,6 +70,8 @@ end
 
 --]] Script
 
+gameCache:setValue('scraps', 0)
+
 --> Setup slots
 for i = 1, slotCount do
     local thisSlot = carSlot.new(i)
@@ -82,7 +85,7 @@ local lastPlayerCount = 0
 
 local spawnGoal = {
              baseTime = workspace:GetServerTimeNow()
-}; spawnGoal.endTime  = workspace:GetServerTimeNow()+spawnInterval*(runService:IsStudio() and .1 or 1.5)
+}; spawnGoal.endTime  = workspace:GetServerTimeNow()+spawnInterval*(runService:IsStudio() and .25 or 1.5)
 
 runService.Heartbeat:Connect(function(deltaTime)
     --[[ UPDATE SPAWN TIME ]]--

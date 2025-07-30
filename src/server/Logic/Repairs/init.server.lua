@@ -21,6 +21,7 @@ local sawdust = require(replicatedStorage.Sawdust)
 
 local networking = sawdust.core.networking
 local caching = sawdust.core.cache
+local cdn = sawdust.core.cdn
 
 --]] Settings
 --]] Constants
@@ -29,11 +30,16 @@ local gameChannel = networking.getChannel('game')
 local vehicleChannel = networking.getChannel('vehicle')
 
 --> Cache groups
+local gameCache = caching.findCache('game')
+
 local vehicleCache = caching.findCache('vehicle')
 local carSlotCache = caching.findCache('carSlots')
 
 local physItems = caching.findCache('physItems')
 local physItemDrags = caching.findCache('physItems.dragging')
+
+--> CDN providers
+local partCDN = cdn.getProvider('part')
 
 --]] Variables
 --]] Functions
@@ -141,11 +147,133 @@ vehicleChannel.finish:handle(function(req, res)
         warn(`[{script.Name}] Player ({callerTag}) provided an unregistered vehicle uuid! (UUID8: {vehicleUuid:sub(1,8)})`)
         return end
 
+    --> Compare expectations
+    local expectations = foundVehicle.raider.expectations
+    local tolerenceScores = { --> How many total issues each mood can tolerate
+        patient = 2,
+        impatient = 1,
+        violent = 0,
+        desperate = 3, }
+
+    local payments = {
+        cleanPart = 10,
+        issueFixed = 25,
+    }
+
+    --> Find total problems
+    local totalProblems = 0
+    local workDone = {
+        partsCleaned = 0,
+        issuesFixed = 0,
+    }
+
+    --[[ Parts Cleaned ]]--
+    for partId: string, partInfo: {} in pairs(foundVehicle.build.chassis) do
+        local dirty = partInfo.dirty
+
+        if dirty >= expectations.chassis.maxDirt then
+            totalProblems += 1
+        end
+    end
+
+    for partId: string, partInfo: {} in pairs(foundVehicle.origIssues.chassis) do
+        local curDirty = foundVehicle.build.chassis[partId].dirty
+
+        if  (partInfo.dirty > expectations.chassis.maxDirt)
+        and (curDirty <= expectations.chassis.maxDirt) then
+            --> Part was fully clean
+            workDone.partsCleaned += 1
+        end
+    end
+
+    --[[ Parts Fixed ]]--
+    local qualityPoints = 0
+    local qualityParts = 0
+
+    for partId: string, part: physItem.PhysicalItem in pairs(foundVehicle.build.engineBay) do
+        local isBroken = false
+        local tags = part:getTags()
+        for tag: string in pairs(tags) do
+            local iTag, issue = unpack(tag:split('.'))
+            if iTag~='issue' then continue end
+
+            if not table.find(expectations.engineBay.allowedIssues, issue) then
+                isBroken = true
+                totalProblems += 1
+            end
+        end
+
+        if not isBroken then
+            --> Add quality points
+            local partAsset = partCDN:getAsset(part.__itemId)
+            qualityPoints+=partAsset.behavior.quality
+            qualityParts+=1
+        end
+    end
+
+    for partId: string, partInfo: {} in pairs(foundVehicle.origIssues.engineBay) do
+        local foundPart = foundVehicle.build.engineBay[partId]
+        for issueId: string, isIssue in pairs(partInfo[2]) do
+            if isIssue~=true then continue end
+            if not foundPart:hasTag(`issue.{issueId}`) then
+                --> Part was fixed
+                workDone.issuesFixed += 1
+            end
+        end
+    end
+
+    --> Calculate base payment
+    local basePayment = 0
+    basePayment = basePayment + (workDone.partsCleaned*payments.cleanPart)
+    basePayment = basePayment + (workDone.issuesFixed *payments.issueFixed)
+
+    local avgQuality = qualityPoints/qualityParts
+    basePayment = basePayment + math.floor(avgQuality*.5)
+
+    --> Decide to scam
+    local scamChances = {
+        patient = .05,
+        impatient = .15,
+        violent = .25,
+        desperate = .10,
+    }
+
+    local raiderMood = foundVehicle.raider.mood
+    local raiderSatisfied = totalProblems <= tolerenceScores[raiderMood]
+    
+    local scamChance = scamChances[raiderMood]
+    if not raiderSatisfied then
+        scamChance *= 1.5 end
+
+    local payment = 0
+    local willScam = math.random() < scamChance
+    if willScam then
+        if raiderSatisfied then
+            payment = basePayment*.7 --> Pay partial scam
+        else
+            payment = 0 --> Pay none scam
+        end
+    else
+        payment = basePayment --> Pay full price
+    end
+
+    --> Put payment in balance
+    gameCache:setValue(gameCache:getValue('scraps')+payment)
+    gameChannel.scraps:with()
+        :broadcastGlobally()
+        :headers('set')
+        :data(gameCache:getValue('scraps'))
+        :fire()
+
     --> Remove car
     carSlotCache:getValue(foundVehicle:getBay()):empty()
     
     table.remove(req.data, 1)
     foundVehicle:driveAway()
+
+    res.setHeaders(req.headers)
+    res.setData(raiderSatisfied, willScam)
+    res.send()
 
 end)
 

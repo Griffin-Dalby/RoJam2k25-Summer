@@ -228,16 +228,94 @@ local intro_quotes = {
     'What could it possibly be now?', 'I don\'t have time to converse with you.', 'I came in for a car repair, not a chat over coffee.',
 }
 
+local exit_quotes = {
+   ['scam'] = {
+       [true] = {
+           ['satisfied'] = {
+               "Thanks for the ride, sucker!",
+               "Pleasure doing business... heh.",
+               "You're too trusting for this wasteland.",
+               "Nice work! Too bad you won't see a cap for it.",
+               "Haha, you actually thought I'd pay full price?",
+               "Consider this a lesson in wasteland economics.",
+               "Beautiful work... shame I'm broke!",
+               "You should've asked for payment upfront, rookie.",
+               "Thanks for the free labor, chump!",
+               "Sorry kid, caps are tight these days.",
+           },
+           ['unsatisfied'] = {
+               "This junk ain't worth full price.",
+               "You call this fixed? I'm keeping my caps.",
+               "Better luck next time, grease monkey.",
+               "Shoddy work gets shoddy pay... which is nothing.",
+               "I wanted a mechanic, not a parts destroyer.",
+               "You owe ME for wasting my time.",
+               "This heap's worse than when I brought it in!",
+               "Keep dreaming if you think I'm paying for this.",
+               "I've seen radroaches do better repair work.",
+               "Next time I'll find a real mechanic.",
+           },
+       },
+
+       [false] = {
+           ['satisfied'] = {
+               "Fair work deserves fair pay.",
+               "Not bad, kid. Here's your caps.",
+               "Finally, someone who knows their trade.",
+               "Quality work right there. Worth every cap.",
+               "You've earned this payment, no question.",
+               "Solid repairs. I'll be back for sure.",
+               "Now that's what I call professional work.",
+               "Keep this up and you'll make a name for yourself.",
+               "Rare to find honest work in the wasteland.",
+               "My ride purrs like a pre-war luxury car!",
+           },
+           ['unsatisfied'] = {
+               "Sloppy work, but a deal's a deal.",
+               "I ain't happy, but I pay my debts.",
+               "Next time do it right the first time.",
+               "This'll have to do... here's your caps.",
+               "Not great, but you tried. Payment's fair.",
+               "I keep my word, even when the work's questionable.",
+               "Could be better, but a deal's a deal.",
+               "You're lucky I'm honest about payments.",
+               "I'll pay, but don't expect me back soon.",
+               "Mediocre work gets mediocre recommendations.",
+           }
+       }
+   }
+}
+
 local moods = {
     'patient',
     'impatient',
     'violent',
+    'desperate'
+}
+local expectations = {
+    patient = {
+        chassis = {maxDirt = 45},
+        engineBay = {allowedIssues = {}},
+    },
+    impatient = {
+        chassis = {maxDirt = 65},
+        engineBay = {allowedIssues = {}}
+    },
+    violent = {
+        chassis = {maxDirt = 15},
+        engineBay = {allowedIssues = {}}
+    },
+    desperate = {
+        chassis = {maxDirt = 80},
+        engineBay = {allowedIssues = {'overheat'}}
+    },
 }
 
 local moodBasePatience = {
     ['patient'] = 50,
-    ['impatient'] = 25,
-    ['violent'] = 35
+    ['impatient'] = 35,
+    ['violent'] = 40,
+    ['desperate'] = 55
 }
 
 --]] Constants
@@ -270,6 +348,7 @@ raider.__index = raider
 type self = {
     uuid: string,
     mood: string,
+    expectations: typeof(expectations.patient),
     
     model: Model?,
 
@@ -284,6 +363,7 @@ function raider.new(uuid: string, outfitId: number, headId: number, skinTone: Co
     --[[ SETUP SELF ]]--
     self.uuid = uuid
     self.mood = isServer and moods[math.random(1, #moods)] or mood
+    self.expectations = expectations[self.mood]
 
     if isServer then
         --[[ SERVER ]]--
@@ -351,6 +431,7 @@ function raider.new(uuid: string, outfitId: number, headId: number, skinTone: Co
 
     local raiderTemplate = playerUi.Templates.RaiderSlot:Clone()
     raiderTemplate.RaiderName.Text = `{firstName} {lastName:sub(1,1):upper()}.`
+    raiderTemplate.Name = uuid
     
     local templateModel = self.model:Clone()
     templateModel:PivotTo(CFrame.new(0, 0, 0))
@@ -363,7 +444,7 @@ function raider.new(uuid: string, outfitId: number, headId: number, skinTone: Co
             raiderTemplate.Viewport.BayID.Text = `Bay {bayId}` end
         raiderTemplate.Patience.Bar.Size = UDim2.new(math.max(self.patience/self.maxPatience, 0), 0, 1, 0)
 
-        self.patience -= dT --> Accurate second timer
+        self.patience -= dT
         if self.patience <= 0 then
             --> Patience ran out!
         end
@@ -425,13 +506,22 @@ function raider.new(uuid: string, outfitId: number, headId: number, skinTone: Co
             patienceMeter = nil
 
             raiderTemplate:Destroy()
+            vehicleChannel.finish:with()
+                :headers()
+                :data(uuid)
+                :invoke()
+                    :andThen(function(req)
+                        if req[1] == nil then return end
+
+                        local satisfied, scam = unpack(req)
+                        local quotes = exit_quotes.scam[scam][satisfied and 'satisfied' or 'unsatisfied']
+                        local quote = quotes[math.random(1, #quotes)]
+
+                        raiderInteraction.Quote.QuoteBox.Text = quote
+                    end)
 
             task.delay(2, function()
                 cleanup()
-                vehicleChannel.finish:with()
-                    :headers()
-                    :data(uuid)
-                    :fire()
             end)
         end)
         exitConnection = raiderInteraction.Interactions.Exit.Button.MouseButton1Down:Once(cleanup)

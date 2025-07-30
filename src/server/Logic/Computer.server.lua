@@ -30,7 +30,7 @@ local rng = Random.new()
 local gameChannel = networking.getChannel('game')
 
 --> Cache groups
-local playerCache = caching.findCache('players')
+local gameCache = caching.findCache('game')
 
 --> CDN providers
 local partCDN = cdn.getProvider('part')
@@ -43,19 +43,16 @@ local headerHandlers = {
     ['purchase'] = function(caller: Player, itemId: string, variationId: string)
         local foundAsset = partCDN:getAsset(`{itemId}.{variationId}`)
         assert(foundAsset, `Failed to find asset w/ id "{itemId}.{variationId}"!`)
-        
-        local playerData = playerCache:findTable(caller)
-        assert(playerData, `Failed to find data for player {caller.Name}.{caller.UserId}!`)
 
-        local scraps = playerData:getValue('scraps')
+        local scraps = gameCache:getValue('scraps')
         local price = foundAsset.behavior.buyPrice
         
         if scraps >= price then --> Purchase
-            playerData:setValue('scraps', scraps-price)
+            gameCache:setValue('scraps', scraps-price)
             gameChannel.scraps:with()
-                :broadcastTo{caller}
+                :broadcastGlobally()
                 :headers('set')
-                :data(playerData:getValue('scraps'))
+                :data(gameCache:getValue('scraps'))
                 :fire()
 
             local shippingArea = workspace.Gameplay.ShippingArea :: Part
