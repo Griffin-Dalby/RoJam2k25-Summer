@@ -62,7 +62,6 @@ prompt.Triggered:Connect(function(playerWhoTriggered)
         
     else
         --> Open faucet
-
     end
 
     worldChannel.faucet:with()

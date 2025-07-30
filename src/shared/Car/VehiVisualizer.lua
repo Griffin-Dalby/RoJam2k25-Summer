@@ -14,6 +14,7 @@
 local replicatedStorage = game:GetService('ReplicatedStorage')
 local runService = game:GetService('RunService')
 local players = game:GetService('Players')
+local https = game:GetService('HttpService')
 
 --]] Modules
 local physItem = require(replicatedStorage.Shared.PhysItem)
@@ -41,6 +42,7 @@ local cdnGame, cdnVFX  = cdn.getProvider('game'), cdn.getProvider('vfx')
 local vehicleCache = caching.findCache('vehicle')
 local carSlotCache = caching.findCache('carSlots')
 local physItemCache = caching.findCache('physItems')
+local tutorialCache = caching.findCache('tutorial')
 
 --> Networking channels
 local gameChannel = networking.getChannel('game')
@@ -146,6 +148,7 @@ function carVis.new(uuid: string, spawnOffset: number, buildInfo: {}, buildUuids
     end
 
     local engineOlapParams = OverlapParams.new()
+    local tutorialId = nil
     local runtime = runService.Heartbeat:Connect(function(deltaTime)
         --> Update engine bay
         for hitboxId, item: physItem.PhysicalItem in pairs(mappedHitboxes) do
@@ -153,6 +156,39 @@ function carVis.new(uuid: string, spawnOffset: number, buildInfo: {}, buildUuids
             local hitboxCf = hitboxes[hitboxId].CFrame :: CFrame
 
             if item.grabbed then --> Remove from engine bay
+                --[[ TUTORIAL ]]--
+                if item.grabbed == player then
+                    if item:hasTag('issue.fire') and not tutorialCache:getValue('issue.fire') then
+                        local id = https:GenerateGUID(false)
+                        tutorialId = id
+
+                        playerUi.Tutorial.Label.Text = `That looks... unsatisfactory... scrap this {hitboxId} and go get a new one.`
+                        playerUi.Tutorial.Visible = true
+                        task.delay(5, function()
+                            if tutorialId ~= id then return end
+                            tutorialId = nil
+                            
+                            playerUi.Tutorial.Visible = false
+                            tutorialCache:setValue('issue.fire', true)
+                        end)
+                        
+                    elseif item:hasTag('issue.overheat') and not tutorialCache:getValue('issue.overheat') then
+                        local id = https:GenerateGUID(false)
+                        tutorialId = id
+
+                        playerUi.Tutorial.Label.Text = `Looks like this {hitboxId} has overheated! You can save the scrap, just go run it under the faucet.`
+                        playerUi.Tutorial.Visible = true
+                        task.delay(5, function()
+                            if tutorialId ~= id then return end
+                            tutorialId = nil
+
+                            playerUi.Tutorial.Visible = false
+                            tutorialCache:setValue('issue.overheat', true)
+                        end)
+                    end
+                end
+
+                --[[ LOGIC ]]--
                 vehicleChannel.fix:with()
                     :headers('takePart')
                     :data(self.__uuid, hitboxId)

@@ -36,10 +36,20 @@ local function loadPlayerData(player: Player)
 	--> Collision Groups
 	if not charConns[player] then
 		charConns[player] = player.CharacterAdded:Connect(function(character)
+			--> Collision group
 			for _, part in pairs(character:GetChildren()) do
 				if not part:IsA('BasePart') then continue end
 				part.CollisionGroup = 'Player'
 			end
+
+			--> Make blocky
+			local humanoid = character:WaitForChild('Humanoid') :: Humanoid
+			local humanDesc = humanoid:GetAppliedDescription()
+			humanDesc.Head, humanDesc.Torso = 0, 0
+			humanDesc.LeftArm, humanDesc.RightArm = 0, 0
+			humanDesc.LeftLeg, humanDesc.RightLeg = 0, 0
+			
+			humanoid:ApplyDescription(humanDesc)
 		end)
 	end
 
