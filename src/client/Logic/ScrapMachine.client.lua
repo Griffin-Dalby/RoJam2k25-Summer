@@ -98,6 +98,5 @@ runService.Heartbeat:Connect(function(deltaTime)
             warn(`[{script.Name}] Failed to scrap item! (UUID8: {physItem.__itemUuid:sub(1,8)})`)
             return end
 
-        
     end
 end)

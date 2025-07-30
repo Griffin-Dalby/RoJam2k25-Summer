@@ -45,7 +45,13 @@ local headerHandlers = {
         local currentScraps = gameCache:getValue('scraps')
         local scrapPriceRng = thisItem.__itemAsset.stats.scrapPrice
         gameCache:setValue('scraps', currentScraps+math.random(scrapPriceRng[1], scrapPriceRng[2])) --> TODO: Scale w/ players in game
-
+        
+        worldChannel.scrapMachine:with()
+            :broadcastGlobally()
+            :headers('burn')
+            :data()
+            :fire()
+        
         gameChannel.scraps:with()
             :broadcastGlobally()
             :headers('set')
