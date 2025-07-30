@@ -56,6 +56,7 @@ local isServer = runService:IsServer()
 
 --> Networking channel
 local gameChannel = networking.getChannel('game')
+local vehicleChannel = networking.getChannel('vehicle')
 
 --> Caching groups
 local vehicleCache = caching.findCache('vehicle')
@@ -162,6 +163,10 @@ function car.new(uuid: string, spawnOffset: number, buildInfo: {}, buildUuids: {
             for issueId: string, state: boolean in pairs(issues) do
                 if not state then continue end
                 part:addTag(`issue.{issueId}`)
+
+                if issueId == 'fire' then
+                    part.fire = math.random(50, 100)
+                end
             end
         end
 
@@ -243,11 +248,23 @@ function car:getRaider(): raider.Raider
     return self.raider end
 
 --[[ CONTROLLER ]]--
+function car:driveAway()
+    if isServer then
+        vehicleChannel.finish:with()
+            :broadcastGlobally()
+            :headers('finish')
+            :data(self.uuid)
+            :fire()
+
+        return
+    end
+
+    self.visualizer:__start_driving_away()
+end
 
 --[[ car:setBay(bayId: number)
     Sets the internal bay ID value. ]]
 function car:setBay(bayId: number)
-    print(bayId)
     self.bayId = bayId end
 
 --[[ car:hasRaider(raider: Raider)

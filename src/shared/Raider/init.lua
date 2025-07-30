@@ -245,6 +245,7 @@ local isServer = runService:IsServer()
 
 --> Networking channels
 local gameChannel = networking.getChannel('game')
+local vehicleChannel = networking.getChannel('vehicle')
 
 --> Caching groups
 local vehicleCache = caching.findCache('vehicle')
@@ -426,6 +427,10 @@ function raider.new(uuid: string, outfitId: number, headId: number, skinTone: Co
 
             task.delay(2, function()
                 cleanup()
+                vehicleChannel.finish:with()
+                    :headers()
+                    :data(uuid)
+                    :fire()
             end)
         end)
         exitConnection = raiderInteraction.Interactions.Exit.Button.MouseButton1Down:Once(cleanup)

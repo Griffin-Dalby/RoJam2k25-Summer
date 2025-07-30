@@ -88,11 +88,7 @@ runService.Heartbeat:Connect(function(deltaTime)
     --[[ UPDATE SPAWN TIME ]]--
 
     --> Reconcile Players
-    if #players:GetPlayers()~=lastPlayerCount then
-        calcSpawnInterval()
-    end
-
-    --> Other spawn time tweaks
+    local maxPlayers = #players:GetPlayers()
 
     --[[ SPAWN ]]--
 
@@ -103,7 +99,7 @@ runService.Heartbeat:Connect(function(deltaTime)
 
     --> Check if there's a spot available
     local thisSlot: carSlot.CarSlot
-    for i=1,5 do
+    for i=1,maxPlayers do
         local iSlot = carSlotCache:getValue(i) :: carSlot.CarSlot
         if not iSlot:occupied() then
             thisSlot = thisSlot or iSlot
@@ -119,6 +115,7 @@ runService.Heartbeat:Connect(function(deltaTime)
     spawnGoal.endTime  = thisTime+spawn_minInterval
 
     print(`[{script.Name}] Spawning car!`)
+    
     local newCar = car.new()
     thisSlot:occupySlot(newCar.uuid)
 

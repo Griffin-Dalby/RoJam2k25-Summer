@@ -25,6 +25,7 @@ local caching = sawdust.core.cache
 --]] Settings
 --]] Constants
 --> Networking channels
+local gameChannel = networking.getChannel('game')
 local vehicleChannel = networking.getChannel('vehicle')
 
 --> Cache groups
@@ -102,6 +103,7 @@ vehicleChannel.fix:handle(function(req, res)
     local caller = players:GetPlayerByUserId(req.caller)
     local callerTag = `{caller.Name}.{caller.UserId}`
 
+    --> Sanity Checks
     local vehicleUuid = req.data[1]
     if not vehicleUuid or typeof(vehicleUuid) ~= 'string' then
         warn(`[{script.Name}] Player ({callerTag}) provided a malformed vehicle uuid! (Provided: {vehicleUuid or '<none>'})`)
@@ -121,4 +123,94 @@ vehicleChannel.fix:handle(function(req, res)
     -- res.setHeaders(req.headers)
     headerHandlers[req.headers](caller, foundVehicle, unpack(req.data))
     -- res.send()
+end)
+
+vehicleChannel.finish:handle(function(req, res)
+    local caller = players:GetPlayerByUserId(req.caller)
+    local callerTag = `{caller.Name}.{caller.UserId}`
+
+    --> Sanity Checks
+    local vehicleUuid = req.data[1]
+    if not vehicleUuid or typeof(vehicleUuid) ~= 'string' then
+        warn(`[{script.Name}] Player ({callerTag}) provided a malformed vehicle uuid! (Provided: {vehicleUuid or '<none>'})`)
+        return end
+
+    local foundVehicle = vehicleCache:getValue(vehicleUuid) :: car.Car
+    if not foundVehicle then
+        warn(`[{script.Name}] Player ({callerTag}) provided an unregistered vehicle uuid! (UUID8: {vehicleUuid:sub(1,8)})`)
+        return end
+
+    --> Sanity Checks
+    table.remove(req.data, 1)
+    foundVehicle:driveAway()
+
+end)
+
+--[[ Special Listeners ]]--
+local playersExtinguishing = {}
+local extinguisherHandlers = {
+    ['start'] = function(caller: Player, itemUuid: string)
+        assert(not table.find(playersExtinguishing, caller),
+            `Player ({caller.Name}.{caller.UserId}) attempted to start extinguishing, but they already are!`)
+
+        assert(itemUuid, 'Attempt to start extinguishing w.o/ itemUuid!')
+        local item = physItems:getValue(itemUuid) :: physItem.PhysicalItem
+        assert(item, `Attempt to extinguish w/ invalid itemUuid!`)
+
+        table.insert(playersExtinguishing, caller)
+        gameChannel.extinguisher:with()
+            :broadcastGlobally()
+            :headers('start')
+            :data(caller.UserId, itemUuid)
+            :fire()
+    end,
+
+    ['extinguish'] = function(caller: Player, itemUuid: string)
+        assert(table.find(playersExtinguishing, caller),
+            `Player ({caller.Name}.{caller.UserId}) attempted to extinguish item, while not extinguishing!`)
+
+        assert(itemUuid, 'Attempt to extinguish w.o/ itemUuid!')
+        local item = physItems:getValue(itemUuid) :: physItem.PhysicalItem
+        assert(item, `Attempt to extinguish w/ invalid itemUuid!`)
+
+        if not item:hasTag('issue.fire') then return true end
+        item.fire = math.clamp(item.fire-2, 0, 100)
+        if item.fire==0 then
+            item:removeTag('issue.fire') end
+
+        gameChannel.extinguisher:with()
+            :broadcastGlobally()
+            :headers('extinguish')
+            :data(caller.UserId, itemUuid, item.fire)
+            :fire()
+        return true;
+
+    end,
+
+    ['stop'] = function(caller: Player)
+        local extinguishIndex = table.find(playersExtinguishing, caller)
+        assert(extinguishIndex,
+            `Player ({caller.Name}.{caller.UserId}) attempted to stop extinguishing, while they aren't!`)
+
+        table.remove(playersExtinguishing, extinguishIndex)
+        gameChannel.extinguisher:with()
+            :broadcastGlobally()
+            :headers('stop')
+            :data(caller.UserId)
+            :fire()
+    end
+}
+
+gameChannel.extinguisher:handle(function(req, res)
+    local caller = players:GetPlayerByUserId(req.caller)
+    local callerTag = `{caller.Name}.{caller.UserId}`
+
+    local header = req.headers
+
+    if not extinguisherHandlers[header] then
+        warn(`[{script.Name}] Player ({callerTag}) attempted to extinguish w/ invalid header!`)
+        return end
+
+    res.setHeaders(header)
+    res.setData(extinguisherHandlers[header](caller, unpack(req.data)))
 end)

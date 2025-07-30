@@ -214,20 +214,24 @@ function physItem:grab(grabbingPlayer: Player, callback: (external: true) -> nil
     itemAttachment.Parent, goalAttachment.Parent =
         targetedItem:IsA('Model') and targetedItem.PrimaryPart or targetedItem, goalPart
     
+    local cHoldOffset = self.__itemAsset.style.holdOffset
+    itemAttachment.CFrame = cHoldOffset and cHoldOffset or CFrame.new(0, 0, 0)
+
     goalPart.Parent = workspace.__temp
 
+    local isLocal = grabbingPlayer==players.LocalPlayer
     local alignPos = Instance.new('AlignPosition')
     alignPos.MaxForce = math.huge
-    alignPos.MaxVelocity = 150
-    alignPos.Responsiveness = 40
+    alignPos.MaxVelocity = isLocal and 150 or 300
+    alignPos.Responsiveness = isLocal and 40 or 80
     alignPos.RigidityEnabled = true
     alignPos.Attachment0, alignPos.Attachment1 = itemAttachment, goalAttachment
     alignPos.Parent = itemAttachment.Parent
 
     local alignOri = Instance.new('AlignOrientation')
     alignOri.MaxTorque = math.huge
-    alignOri.MaxAngularVelocity = 500
-    alignOri.Responsiveness = 100
+    alignOri.MaxAngularVelocity = isLocal and 500 or 1000
+    alignOri.Responsiveness = isLocal and 100 or 200
     alignOri.Attachment0, alignOri.Attachment1 = itemAttachment, goalAttachment
     alignOri.Parent = itemAttachment.Parent
 
