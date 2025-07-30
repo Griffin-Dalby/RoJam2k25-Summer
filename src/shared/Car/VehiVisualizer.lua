@@ -337,171 +337,126 @@ function carVis:__start_driving(spawnPosition: Vector3)
     local bayPosition = workspace.Gameplay.StreetBayPoint.Position :: Vector3
     local turnPoint  = workspace.Gameplay.TurnBayPoint.Position :: Vector3
 
-    local cPosition  = CFrame.new(spawnPosition) * CFrame.Angles(
-        math.rad(-90),
-        math.rad(-90),
-        math.rad(0)
-    ):Inverse()
-    local origY = cPosition.Position.Y
-
-    local distance   = (bayPosition-cPosition.Position).Magnitude
-    local direction  = (bayPosition-cPosition.Position).Unit
-    
-    local cruiseDist = math.max(0, distance-accelDist-decelDist)
-
-    local cSpeed
-    local currentPhase = 'approaching' :: 'approaching'|'turning'|'queueing'
+    local cSpeed = 0
+    local cPhase = 'approaching_entrance' :: 'approaching_entrance'|'turning_into_bay'|'finding_parking'|'parked'
     local startTime = tick()
+    local moveConn, wheelConn
 
+    local origY = spawnPosition.Y
     local function handlePos(position: Vector3)
-        return Vector3.new(
-            position.X,
-            origY,
-            position.Z
-        )
-    end
+        return Vector3.new(position.X, origY, position.Z) end
 
-    local function startTurnPhase() : number
-        currentPhase = 'turning'
-        startTime = tick()
-        spawnPosition = self.model.PrimaryPart.Position
+    local function moveStraight(startPos: Vector3, targetPos: Vector3, speed: number, onComplete: () -> ())
+        local dist = (targetPos-startPos).Magnitude
+        local travelTime = dist/speed
 
-        local turnDist = (turnPoint-spawnPosition).Magnitude
-        local turnTime = turnDist/15
-        
-        direction = (turnPoint-spawnPosition).Unit
+        return function (elapsed: number): boolean
+            if elapsed >= travelTime then
+                self.model:PivotTo(CFrame.new(handlePos(targetPos))
+                    * CFrame.Angles(math.rad(-90), math.rad(-90), 0):Inverse())
 
-        return turnTime
-    end
-
-    local function startQueuePhase() : number
-        currentPhase = 'queueing'
-        startTime = tick()
-        spawnPosition = self.model.PrimaryPart.Position
-
-        local slotI, slotPos = getAvailableSlot()
-        local queueDist = (slotPos-spawnPosition).Magnitude
-        local queueTime = queueDist/25
-        direction = (slotPos-spawnPosition).Unit
-
-        return queueTime
-    end
-
-    local defaultRotation = CFrame.Angles(math.rad(-90), math.rad(-90), 0):Inverse()
-    local moveConnection, wheelConnection
-    moveConnection = runService.Heartbeat:Connect(function(deltaTime)
-        
-        --> Move car
-        local elapsed = tick()-startTime
-        
-        local distTravel
-        local inital = tick()
-        if currentPhase == 'approaching' then
-            local shouldStartTurn = false
-            
-            if elapsed <= accelTime then --> Accel
-                cSpeed = (maxSpeed/accelTime)*elapsed
-                distTravel = .5*(maxSpeed/accelTime)*elapsed^2
-            elseif elapsed <= accelTime+(cruiseDist/maxSpeed) then --> Cruising
-                local cruiseTime = elapsed-accelTime
-                cSpeed = maxSpeed
-                distTravel = accelDist+(maxSpeed*cruiseTime)
-            else --> Decel
-                local decelElapsed = elapsed-accelTime-(cruiseDist/maxSpeed)
-                local decelProg = decelElapsed/decelTime
-                cSpeed = maxSpeed*(1-decelProg)
-                distTravel = accelDist+cruiseDist+(maxSpeed*decelElapsed*(1-decelProg/2))
-            
-                if decelProg >= .7 and currentPhase == 'approaching' then
-                    shouldStartTurn = true end
-            end
-
-            if shouldStartTurn then
-                startTurnPhase()
+                cSpeed = speed
+                if onComplete then onComplete() end
+                return true
             else
-                local newPos = spawnPosition+(direction*distTravel)
-                self.model:PivotTo(CFrame.new(handlePos(newPos)) * defaultRotation)
+                local alpha = elapsed/travelTime
+                local newPos = startPos:Lerp(targetPos, alpha)
+
+                cSpeed = speed
+                self.model:PivotTo(CFrame.new(handlePos(newPos))
+                    * CFrame.Angles(math.rad(-90), math.rad(-90), 0):Inverse())
+
+                return false
             end
-        elseif currentPhase == 'turning' then
-            local turnDistance = (turnPoint - spawnPosition).Magnitude
-            local turnTime = turnDistance / 32.5
-            
-            if elapsed >= turnTime then
-                self.model:PivotTo(CFrame.new(handlePos(turnPoint))*defaultRotation)
-                startQueuePhase()
+        end
+    end
+
+    local function turnToTarget(startPos: Vector3, targetPos: Vector3, speed: number, onComplete: () -> ())
+        local dist = (targetPos-startPos).Magnitude
+        local travelTime = dist/speed
+
+        return function(elapsed: number): boolean
+            if elapsed >= travelTime then
+                self.model:PivotTo(CFrame.new(handlePos(targetPos))
+                    * CFrame.Angles(math.rad(-90), math.rad(-90), 0):Inverse())
+
+                cSpeed = speed
+                if onComplete then onComplete() end
+                return true
             else
-                local alpha = elapsed / turnTime
-                local newPosition = spawnPosition:Lerp(turnPoint, alpha)
+                local alpha = elapsed/travelTime
+                local newPos = startPos:Lerp(targetPos, alpha)
+                cSpeed = speed
                 
-                local offset = .65
+                -- Smooth turning - gradually rotate from current direction to target direction
                 local lookDirection
-                if alpha < offset then
-                    lookDirection = (turnPoint - newPosition).Unit
+                if alpha < 0.6 then
+                    --> First part of turn | look toward turn target
+                    lookDirection = (targetPos - newPos).Unit
                 else
-                    local slotI, slotPosition = getAvailableSlot()
-                    local turnAlpha = (alpha - offset) / offset
-                    
-                    local turnPointDirection = (turnPoint - newPosition).Unit
-                    local slotDirection = (slotPosition - newPosition).Unit
-                    
-                    lookDirection = turnPointDirection:Lerp(slotDirection, turnAlpha).Unit
+                    --> Later part of turn | start looking toward bay entry
+                    local bayDirection = (turnPoint - newPos).Unit
+                    local turnDirection = (targetPos - newPos).Unit
+                    local turnAlpha = (alpha - 0.6) / 0.4
+                    lookDirection = turnDirection:Lerp(bayDirection, turnAlpha).Unit
                 end
                 
-                local frontAxleOffset = 2.75
-                local rotationPoint = newPosition + (self.model.PrimaryPart.CFrame.LookVector * frontAxleOffset)
-                local lookCFrame = CFrame.lookAt(rotationPoint, rotationPoint + lookDirection)
-                local finalCFrame = lookCFrame * CFrame.new(0, 0, -frontAxleOffset)
-                
-                self.model:PivotTo(CFrame.new(handlePos(finalCFrame.Position), handlePos(finalCFrame.Position + lookDirection)) * CFrame.Angles(math.rad(-90), math.rad(180), 0):Inverse())
+                -- Apply rotation
+                self.model:PivotTo(CFrame.new(handlePos(newPos), handlePos(newPos + lookDirection)) * CFrame.Angles(math.rad(-90), math.rad(180), 0):Inverse())
+                return false
             end
-        elseif currentPhase == 'queueing' then
-            local vehicle = vehicleCache:getValue(self.__uuid)
+        end
+    end
+
+    local cMover
+    cMover = moveStraight(spawnPosition, bayPosition, 60, function()
+        cPhase = 'turning_into_bay'
+        startTime = tick()
+
+        cMover = turnToTarget(bayPosition, turnPoint, 30, function()
+            cPhase = 'finding_parking'
+            startTime = tick()
 
             local slotIndex, slotPosition = getAvailableSlot()
-            vehicle:setBay(slotIndex)
-
-            local queueDistance = (slotPosition - spawnPosition).Magnitude
-            local queueTime = queueDistance / 25
-            
-            if elapsed >= queueTime then
-                self.model:PivotTo(CFrame.new(handlePos(slotPosition))*defaultRotation)
-                print(tick()-inital)
+            cMover = moveStraight(turnPoint, slotPosition, 20, function()
+                cPhase = 'parked'
                 
-                --> Cleanup
-                moveConnection:Disconnect()
-                moveConnection=nil
-                
-                wheelConnection:Disconnect()
-                wheelConnection=nil
-
+                local vehicle = vehicleCache:getValue(self.__uuid)
+                vehicle:setBay(slotIndex)
                 carSlotCache:getValue(slotIndex):occupySlot(self.__uuid)
-
-                --> Move raider outside
+                
                 task.delay(1, function()
-                    self.__raider:pivotTo(CFrame.new(slotPosition+Vector3.new(0, 3, 18))*CFrame.Angles(0, math.rad(180), 0))
-                    self.__raider:calculatePatience(self.buildInfo)
+                    if self.__raider then
+                        self.__raider:pivotTo(CFrame.new(slotPosition + Vector3.new(0, 3, 18)) * CFrame.Angles(0, math.rad(180), 0))
+                        self.__raider:calculatePatience(self.buildInfo)
+                    end
                 end)
-            else
-                local alpha = elapsed / queueTime
-                local newPosition = spawnPosition:Lerp(slotPosition, alpha)
-                self.model:PivotTo(CFrame.new(handlePos(newPosition))*defaultRotation)
-            end
-        end
+                
+                if moveConn then
+                    moveConn:Disconnect()
+                    moveConn = nil end
+                if wheelConn then
+                    wheelConn:Disconnect()
+                    wheelConn = nil end
+            end)
+        end)
+    end)
 
-        --> Move raider
+    moveConn = runService.Heartbeat:Connect(function(deltaTime)
+        if cPhase == 'parked' then return end
+        
+        local elapsed = tick() - startTime
+        if cMover then
+            cMover(elapsed) end
+        
+        -- Update raider position
         if self.__raider then
             local primaryPosition = self.model.PrimaryPart.CFrame :: CFrame
-            local raiderPosition = primaryPosition:PointToWorldSpace(
-                Vector3.new(2, 0, 0))
-            
-            self.__raider:pivotTo(CFrame.new(raiderPosition) * CFrame.Angles(
-                math.rad(0),
-                math.rad(-90),
-                math.rad(0)
-            ))
+            local raiderPosition = primaryPosition:PointToWorldSpace(Vector3.new(2, 0, 0))
+            self.__raider:pivotTo(CFrame.new(raiderPosition) * CFrame.Angles(0, math.rad(-90), 0))
         end
     end)
-    
+
     local wheelMotors = {}
     for _, inst: Instance in pairs(self.model.PrimaryPart:GetChildren()) do
         if not inst:IsA('Motor6D') then continue end
@@ -511,73 +466,149 @@ function carVis:__start_driving(spawnPosition: Vector3)
     end
 
     local cRot = 0
-    wheelConnection = runService.Heartbeat:Connect(function(deltaTime)
+    wheelConn = runService.Heartbeat:Connect(function(deltaTime)
         if not cSpeed then return end
-        cRot = (cRot+cSpeed/2)%359
+        cRot = (cRot+cSpeed/1.5)%359
         
         for _, Motor: Motor6D in pairs(wheelMotors) do
             Motor.C1 = CFrame.new(Vector3.new(0, 0, 0)) * CFrame.Angles(0, math.rad(90), math.rad(-cRot))
         end
     end)
+    
 end
 
 function carVis:__start_driving_away()
-    local wheelConnection, moveConnection
+    local bayExitEnd = workspace.Gameplay.ExitBayPoint.Position :: Vector3
+    local exitSplit = workspace.Gameplay.StreetExitPoint.Position :: Vector3
+    local finalExit = workspace.Gameplay.FinalStreetPoint.Position :: Vector3
+    
+    local parkingCf = self.model:GetPivot() :: CFrame
+    local parkingPos = parkingCf.Position
 
-    local cSpeed
+    local cSpeed = 0
+    local cPhase = 'exiting_to_bay_end' :: 'exiting_to_bay_end'|'turning_to_road'|'driving_away'
     local startTime = tick()
-    local function driveAway()
-        if self.__raider then
-            local primaryPosition = self.model.PrimaryPart.CFrame :: CFrame
-            local raiderPosition = primaryPosition:PointToWorldSpace(
-                Vector3.new(2, 0, 0))
-            
-            self.__raider:pivotTo(CFrame.new(raiderPosition) * CFrame.Angles(
-                math.rad(0),
-                math.rad(-90),
-                math.rad(0)
-            ))
-        end
 
-        --[[ MOVER ]]-- #region
-        moveConnection = runService.Heartbeat:Connect(function(deltaTime)
-            local elapsed = tick()-startTime
+    local moveConn, wheelConn
+    local origY = parkingPos.Y
 
+    local function handlePos(position: Vector3)
+        return Vector3.new(position.X, origY, position.Z) end
 
-        end)
+    local function moveStraight(startPos: Vector3, targetPos: Vector3, speed: number, onComplete: () -> ())
+        local dist = (targetPos-startPos).Magnitude
+        local travelTime = dist/speed
 
-        --#endregion
+        return function (elapsed: number): boolean
+            if elapsed >= travelTime then
+                self.model:PivotTo(CFrame.new(handlePos(targetPos))
+                    * CFrame.Angles(math.rad(-90), math.rad(-90), 0):Inverse())
 
-        --[[ WHEELS ]]-- #region
+                cSpeed = speed
+                if onComplete then onComplete() end
+                return true
+            else
+                local alpha = elapsed/travelTime
+                local newPos = startPos:Lerp(targetPos, alpha)
 
-        local wheelMotors = {}
-        for _, inst: Instance in pairs(self.model.PrimaryPart:GetChildren()) do
-            if not inst:IsA('Motor6D') then continue end
-            if not inst.Name:sub(3,7) == 'Wheel' then continue end
-            
-            table.insert(wheelMotors, inst)
-        end
+                cSpeed = speed
+                self.model:PivotTo(CFrame.new(handlePos(newPos))
+                    * CFrame.Angles(math.rad(-90), math.rad(-90), 0):Inverse())
 
-        local cRot = 0
-        wheelConnection = runService.Heartbeat:Connect(function(deltaTime)
-            if not cSpeed then return end
-            cRot = (cRot+cSpeed/2)%359
-            
-            for _, Motor: Motor6D in pairs(wheelMotors) do
-                Motor.C1 = CFrame.new(Vector3.new(0, 0, 0)) * CFrame.Angles(0, math.rad(90), math.rad(-cRot))
+                return false
             end
-        end)
-
-        -- #endregion
+        end
     end
 
-    local vehicle = vehicleCache:getValue(self.__uuid)
-    local bayId = vehicle:getBay()
+    local function turnToTarget(startPos: Vector3, targetPos: Vector3, speed: number, onComplete: () -> ())
+        local dist = (targetPos-startPos).Magnitude
+        local travelTime = dist/speed
 
-    if bayId == 1 then --> Simply in the first bay
-        driveAway()
-    elseif getAvailableSlot()[1] == 1 then --> Cars ahead clear
-        driveAway() end
+        return function(elapsed: number): boolean
+            if elapsed >= travelTime then
+                self.model:PivotTo(CFrame.new(handlePos(targetPos))
+                    * CFrame.Angles(math.rad(-90), math.rad(-90), 0):Inverse())
+
+                cSpeed = speed
+                if onComplete then onComplete() end
+                return true
+            else
+                local alpha = elapsed/travelTime
+                local newPos = startPos:Lerp(targetPos, alpha)
+                cSpeed = speed
+                
+                local lookDirection
+                if alpha < 0.6 then
+                    lookDirection = (targetPos - newPos).Unit
+                else
+                    local roadDirection = (finalExit - newPos).Unit
+                    local turnDirection = (targetPos - newPos).Unit
+
+                    local turnAlpha = (alpha - 0.6) / 0.4
+                    lookDirection = turnDirection:Lerp(roadDirection, turnAlpha).Unit
+                end
+                
+                -- Apply rotation
+                self.model:PivotTo(CFrame.new(handlePos(newPos), handlePos(newPos + lookDirection)) * CFrame.Angles(math.rad(-90), math.rad(180), 0):Inverse())
+                return false
+            end
+        end
+    end
+
+    local cMover
+    cMover = moveStraight(parkingPos, bayExitEnd, 20, function()
+        cPhase = 'turning_to_road'
+        startTime = tick()
+
+        cMover = turnToTarget(bayExitEnd, exitSplit, 25, function()
+            cPhase = 'driving_away'
+            startTime = tick()
+
+            cMover = moveStraight(exitSplit, finalExit, 45, function()
+                if moveConn then
+                    moveConn:Disconnect()
+                    moveConn = nil
+                end
+
+                if wheelConn then
+                    wheelConn:Disconnect()
+                    wheelConn = nil
+                end
+
+                --> Cleanup model
+            end)
+        end)
+    end)
+
+    moveConn = runService.Heartbeat:Connect(function(deltaTime)
+        local elapsed = tick()-startTime
+        if cMover then
+            cMover(elapsed) end
+
+        if self.__raider then
+            local primaryPosition = self.model.PrimaryPart.CFrame :: CFrame
+            local raiderPosition = primaryPosition:PointToWorldSpace(Vector3.new(2, 0, 0))
+            self.__raider:pivotTo(CFrame.new(raiderPosition) * CFrame.Angles(0, math.rad(-90), 0))
+        end
+    end)
+
+    local wheelMotors = {}
+    for _, inst: Instance in pairs(self.model.PrimaryPart:GetChildren()) do
+        if not inst:IsA('Motor6D') then continue end
+        if not inst.Name:sub(3,7) == 'Wheel' then continue end
+        
+        table.insert(wheelMotors, inst)
+    end
+
+    local cRot = 0
+    wheelConn = runService.Heartbeat:Connect(function(deltaTime)
+        if not cSpeed then return end
+        cRot = (cRot+cSpeed/1.5)%359
+        
+        for _, Motor: Motor6D in pairs(wheelMotors) do
+            Motor.C1 = CFrame.new(Vector3.new(0, 0, 0)) * CFrame.Angles(0, math.rad(90), math.rad(-cRot))
+        end
+    end)
 end
 
 return carVis

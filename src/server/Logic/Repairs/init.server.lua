@@ -30,6 +30,7 @@ local vehicleChannel = networking.getChannel('vehicle')
 
 --> Cache groups
 local vehicleCache = caching.findCache('vehicle')
+local carSlotCache = caching.findCache('carSlots')
 
 local physItems = caching.findCache('physItems')
 local physItemDrags = caching.findCache('physItems.dragging')
@@ -140,7 +141,9 @@ vehicleChannel.finish:handle(function(req, res)
         warn(`[{script.Name}] Player ({callerTag}) provided an unregistered vehicle uuid! (UUID8: {vehicleUuid:sub(1,8)})`)
         return end
 
-    --> Sanity Checks
+    --> Remove car
+    carSlotCache:getValue(foundVehicle:getBay()):empty()
+    
     table.remove(req.data, 1)
     foundVehicle:driveAway()
 

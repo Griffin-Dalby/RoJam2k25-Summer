@@ -137,6 +137,10 @@ function physItem:drop(position: Vector3?, velocity: {linear: Vector3?, angular:
         return true
     end
 
+    if self.using then
+        self:use(false)
+    end
+
     if self.grabUpdater then --> Disconnect logic
         self.grabUpdater:Disconnect()
         self.grabUpdater = nil end

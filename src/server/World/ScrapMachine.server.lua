@@ -49,7 +49,7 @@ local headerHandlers = {
         playerData:setValue('scraps', currentScraps+math.random(scrapPriceRng[1], scrapPriceRng[2]))
 
         gameChannel.scraps:with()
-            :broadcastTo(caller)
+            :broadcastTo{caller}
             :headers('set')
             :data(playerData:getValue('scraps'))
             :fire()

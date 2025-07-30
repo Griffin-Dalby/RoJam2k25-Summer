@@ -249,6 +249,7 @@ local vehicleChannel = networking.getChannel('vehicle')
 
 --> Caching groups
 local vehicleCache = caching.findCache('vehicle')
+local carSlotCache = caching.findCache('carSlots')
 
 --> CDN providers
 local gameProvider = cdn.getProvider('game')

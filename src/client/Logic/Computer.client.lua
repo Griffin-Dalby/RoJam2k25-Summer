@@ -191,8 +191,49 @@ function openUi()
 
             newTemplate.Parent = currentUi.Main.ePay.Items
 
+            local purchaseDebounce = false
             connections[`{itemId}.{variationId}`] = newTemplate.PurchaseButton.MouseButton1Down:Connect(function()
+                if purchaseDebounce then return end
+                purchaseDebounce = true
+
+                newTemplate.PurchaseButton.Text = 'Purchasing...'
+                newTemplate.PurchaseButton.BackgroundColor3 = Color3.fromRGB(115, 153, 0)
                 
+                local response
+                gameChannel.computer:with()
+                    :headers('purchase')
+                    :data(itemId, variationId)
+                    :timeout(2)
+                    :invoke()
+                        :andThen(function(res)
+                            response = res[1]
+                        end)
+                        :catch(function(issue)
+                            warn(`[{script.Name}] An error occured while trying to purchase "{itemId}.{variationId}"!`)
+                            response = false
+                        end)
+
+                repeat task.wait(0) until response~=nil
+                task.delay(1.25, function()
+                    if not newTemplate.PurchaseButton then return end
+
+                    newTemplate.PurchaseButton.BackgroundColor3 = Color3.fromRGB(153, 204, 0)
+                    newTemplate.PurchaseButton.Text = 'Purchase'
+                end)
+                task.delay(1.5, function()
+                    purchaseDebounce = false end)
+
+                if response == true then
+                    newTemplate.PurchaseButton.BackgroundColor3 = Color3.fromRGB(117, 177, 57)
+                    newTemplate.PurchaseButton.Text = 'Purchased!'
+                elseif response == 'funds' then
+                    newTemplate.PurchaseButton.BackgroundColor3 = Color3.fromRGB(150,0,0)
+                    newTemplate.PurchaseButton.Text = 'Too broke :('
+                else 
+                    newTemplate.PurchaseButton.BackgroundColor3 = Color3.fromRGB(255,0,0)
+                    newTemplate.PurchaseButton.Text = 'Try again...'
+                end
+                    
             end)
             
             if not templates[itemId] then templates[itemId] = {} end
@@ -207,6 +248,10 @@ function openUi()
     currentUi.Enabled = true
 
     return function()
+        for _, connection: RBXScriptConnection in pairs(connections) do
+            connection:Disconnect() end
+        table.clear(connections)
+
         conn:Disconnect()
         conn = nil
 

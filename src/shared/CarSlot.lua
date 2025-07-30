@@ -80,6 +80,19 @@ function carSlot:occupySlot(carUUID: string)
     self.currentCar = currentCar
 end
 
+function carSlot:empty()
+    assert(self.currentCar, `Attempt to empty an already empty slot!`)
+
+    if isServer then
+        gameChannel.vehicleSlot:with()
+            :broadcastGlobally()
+            :headers('empty')
+            :data(self.index)
+    end
+
+    self.currentCar = nil
+end
+
 --[[ DATA FETCHERS ]]--
 
 --[[ carSlot:occupied()

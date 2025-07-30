@@ -10,6 +10,7 @@
 --]]
 
 --]] Services
+local Players = game:GetService('Players')
 local replicatedStorage = game:GetService('ReplicatedStorage')
 local runService = game:GetService('RunService')
 local https = game:GetService('HttpService')
@@ -60,6 +61,7 @@ local vehicleChannel = networking.getChannel('vehicle')
 
 --> Caching groups
 local vehicleCache = caching.findCache('vehicle')
+local carSlotCache = caching.findCache('carSlots')
 
 --]] Variables
 --]] Functions
@@ -212,7 +214,7 @@ function car.new(uuid: string, spawnOffset: number, buildInfo: {}, buildUuids: {
                 )
             end
         end
-        
+
         --> Replicate & save
         gameChannel.vehicle:with()
             :broadcastGlobally()
@@ -259,6 +261,7 @@ function car:driveAway()
         return
     end
 
+    carSlotCache:getValue(self:getBay()):empty()    
     self.visualizer:__start_driving_away()
 end
 

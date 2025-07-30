@@ -153,7 +153,6 @@ return sawdust.builder.new('camera')
             if not self.physDragging then
                 if constraintOrVelo then
                     constraintOrVelo:Destroy() end
-                print(goalPart)
                 return end
 
             veloConnection = runService.Heartbeat:Connect(function()

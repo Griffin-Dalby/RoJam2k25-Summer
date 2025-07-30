@@ -25,7 +25,7 @@ local networking = sawdust.core.networking
 
 --]] Settings
 --> Spawn Rate (Cubic)
-local spawn_baseInterval = 60
+local spawn_baseInterval = 20
 local spawn_minInterval  = 40
 local spawn_maxPlayers   = 4
 
@@ -86,6 +86,7 @@ local spawnGoal = {
 
 runService.Heartbeat:Connect(function(deltaTime)
     --[[ UPDATE SPAWN TIME ]]--
+    calcSpawnInterval()
 
     --> Reconcile Players
     local maxPlayers = #players:GetPlayers()
@@ -99,12 +100,15 @@ runService.Heartbeat:Connect(function(deltaTime)
 
     --> Check if there's a spot available
     local thisSlot: carSlot.CarSlot
+    local slotIndex: number
     for i=1,maxPlayers do
         local iSlot = carSlotCache:getValue(i) :: carSlot.CarSlot
         if not iSlot:occupied() then
             thisSlot = thisSlot or iSlot
+            slotIndex = slotIndex or i
         else
             thisSlot = nil
+            slotIndex = nil
         end
     end
 
@@ -118,5 +122,6 @@ runService.Heartbeat:Connect(function(deltaTime)
     
     local newCar = car.new()
     thisSlot:occupySlot(newCar.uuid)
+    newCar:setBay(slotIndex)
 
 end)

@@ -32,6 +32,13 @@ local headerHandlers = {
         assert(foundSlot, `Failed to find slot @ index [{index}]!`)
 
         foundSlot:occupySlot(carUUID)
+    end,
+
+    ['empty'] = function(index: number)
+        local foundSlot = carSlotCache:getValue(index) :: carSlot.CarSlot
+        assert(foundSlot, `Failed to find slot @ index [{index}]!`)
+
+        foundSlot:empty()
     end
 }
 
