@@ -156,8 +156,8 @@ vehicleChannel.finish:handle(function(req, res)
         desperate = 3, }
 
     local payments = {
-        cleanPart = 10,
-        issueFixed = 25,
+        cleanPart = 25,
+        issueFixed = 75,
     }
 
     --> Find total problems
@@ -224,11 +224,11 @@ vehicleChannel.finish:handle(function(req, res)
 
     --> Calculate base payment
     local basePayment = 0
-    basePayment = basePayment + (workDone.partsCleaned*payments.cleanPart)
-    basePayment = basePayment + (workDone.issuesFixed *payments.issueFixed)
+    basePayment += (workDone.partsCleaned*payments.cleanPart)
+    basePayment += (workDone.issuesFixed *payments.issueFixed)
 
     local avgQuality = qualityPoints/qualityParts
-    basePayment = basePayment + math.floor(avgQuality*.5)
+    basePayment += math.floor(avgQuality*.5)
 
     --> Decide to scam
     local scamChances = {
@@ -258,7 +258,7 @@ vehicleChannel.finish:handle(function(req, res)
     end
 
     --> Put payment in balance
-    gameCache:setValue(gameCache:getValue('scraps')+payment)
+    gameCache:setValue('scraps', gameCache:getValue('scraps')+payment)
     gameChannel.scraps:with()
         :broadcastGlobally()
         :headers('set')

@@ -69,10 +69,10 @@ physItemRemote:handle(function(req, res)
             return true end
 
         local dist = (rootPart.Position-Vector3.new(unpack(foundItem:getTransform().position))).Magnitude
-        if not inversePickup and dist>50 then
-            warn(`[{script.Name}] {playerSig} interact w/ item outside of range! (UUID: {itemUuid:sub(1,8)}...)`)
-            res.setData(false)
-            res.send(); return false end
+        -- if not inversePickup and dist>50 then
+        --     warn(`[{script.Name}] {playerSig} interact w/ item outside of range! (UUID: {itemUuid:sub(1,8)}...)`)
+        --     res.setData(false)
+        --     res.send(); return false end
 
         return true
     end
@@ -157,9 +157,9 @@ physItemRemote:handle(function(req, res)
                   rotX, rotY, rotZ = math.deg(rotX), math.deg(rotY), math.deg(rotZ)
 
             local dist = (Vector3.new(unpack(lastPosition))-newPosition).Magnitude
-            if grabbedItem.isRendered and dist>15 then
-                warn(`[{script.Name}] Player ({caller.Name}.{caller.UserId}) attempted to drag item too far during tick!`)
-                return end
+            -- if grabbedItem.isRendered and dist>15 then
+            --     warn(`[{script.Name}] Player ({caller.Name}.{caller.UserId}) attempted to drag item too far during tick!`)
+            --     return end
 
             physItemGoals:setValue(caller, newPosition)
             grabbedItem:setTransform{

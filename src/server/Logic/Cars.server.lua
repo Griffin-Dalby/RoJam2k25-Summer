@@ -85,7 +85,7 @@ local lastPlayerCount = 0
 
 local spawnGoal = {
              baseTime = workspace:GetServerTimeNow()
-}; spawnGoal.endTime  = workspace:GetServerTimeNow()+spawnInterval*(runService:IsStudio() and .25 or 1.5)
+}; spawnGoal.endTime  = workspace:GetServerTimeNow()+spawnInterval*(runService:IsStudio() and .75 or 1.5)
 
 runService.Heartbeat:Connect(function(deltaTime)
     --[[ UPDATE SPAWN TIME ]]--
@@ -100,6 +100,9 @@ runService.Heartbeat:Connect(function(deltaTime)
     local thisTime = workspace:GetServerTimeNow()
     if thisTime<spawnGoal.endTime then
         return end
+
+    spawnGoal.baseTime = thisTime
+    spawnGoal.endTime  = thisTime+spawn_minInterval
 
     --> Check if there's a spot available
     local thisSlot: carSlot.CarSlot
@@ -116,11 +119,6 @@ runService.Heartbeat:Connect(function(deltaTime)
     end
 
     if not thisSlot then return end --> Wait until ones available
-
-    --> Set time
-    spawnGoal.baseTime = thisTime
-    spawnGoal.endTime  = thisTime+spawn_minInterval
-
     print(`[{script.Name}] Spawning car!`)
     
     local newCar = car.new()

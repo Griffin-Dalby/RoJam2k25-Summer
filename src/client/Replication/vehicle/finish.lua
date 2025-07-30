@@ -38,4 +38,5 @@ return function(req, res)
         return end
 
     vehicle:driveAway()
+    vehicle.raider:removePresence()
 end

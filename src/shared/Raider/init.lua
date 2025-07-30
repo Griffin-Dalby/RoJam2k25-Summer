@@ -450,6 +450,8 @@ function raider.new(uuid: string, outfitId: number, headId: number, skinTone: Co
         end
     end)
 
+    self.patienceMeter = {patienceMeter, raiderTemplate}
+
     raiderTemplate.Parent = playerUi.RaiderList
     raiderTemplate.Visible = true
 
@@ -465,6 +467,8 @@ function raider.new(uuid: string, outfitId: number, headId: number, skinTone: Co
         local playerUi = playerWhoTriggered.PlayerGui
         local raiderInteraction = playerUi.UI.RaiderInteraction:Clone() :: Frame
         raiderInteraction.Name = `interaction_{firstName}.{lastName}`
+
+        self.raiderInteraction = raiderInteraction
 
         local viewmodel = self.model:Clone()
         viewmodel:pivotTo(CFrame.new(0, 0, 0))
@@ -487,6 +491,8 @@ function raider.new(uuid: string, outfitId: number, headId: number, skinTone: Co
                 interactionRuntime = nil end
 
             raiderInteraction:Destroy()
+            self.raiderInteraction = nil
+
             userInputService.MouseBehavior = Enum.MouseBehavior.LockCenter
             task.delay(1, function()
                 prompt.Enabled = true
@@ -501,9 +507,12 @@ function raider.new(uuid: string, outfitId: number, headId: number, skinTone: Co
         end
 
         doneConnection = raiderInteraction.Interactions.Done.Button.MouseButton1Down:Once(function()
+            self.interacting = true
             raiderInteraction.Interactions.Visible = false
             patienceMeter:Disconnect()
             patienceMeter = nil
+
+            self.patienceMeter = nil
 
             raiderTemplate:Destroy()
             vehicleChannel.finish:with()
@@ -531,6 +540,17 @@ function raider.new(uuid: string, outfitId: number, headId: number, skinTone: Co
     self.model.Parent = workspace.__temp
 
     return self
+end
+
+function raider:removePresence()
+    if isServer then return end
+    if self.patienceMeter then
+        self.patienceMeter[1]:Disconnect()
+        self.patienceMeter[2]:Destroy()
+        self.patienceMeter = nil end
+
+    if self.raiderInteraction and not self.interacting then
+        self.raiderInteraction:Destroy() end
 end
 
 function raider:calculatePatience(vehicleBuild: {})
