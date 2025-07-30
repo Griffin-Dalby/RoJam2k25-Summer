@@ -97,6 +97,11 @@ function physItem.new(itemId: string, itemUuid: string) : PhysicalItem
 
     self.wetness = 0
     
+    --> Create & verify info
+	local itemAsset = itemCDN:getAsset(itemId)
+	assert(itemAsset, `Item with ID {itemId} not found in CDN.`)
+    self.__itemAsset = itemAsset
+
     --> Server behavior
     if isServer then
         physItems:setValue(itemUuid, self)
@@ -111,12 +116,7 @@ function physItem.new(itemId: string, itemUuid: string) : PhysicalItem
         return self
     end
 
-    --> Create & verify info
-	local itemAsset = itemCDN:getAsset(itemId)
-	assert(itemAsset, `Item with ID {itemId} not found in CDN.`)
-
 	--> Set up self visually
-    self.__itemAsset = itemAsset
     self.__itemModel = itemAsset.style.model:Clone()
 
     --> Set up item model

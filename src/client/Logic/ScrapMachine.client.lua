@@ -65,20 +65,6 @@ runService.Heartbeat:Connect(function(deltaTime)
 
         local physItem = physItems:getValue(targetItem:GetAttribute('itemUuid'))
         if not physItem then continue end
-
-        --> Force drop
-        physItem:drop()
-        gameChannel.physItem:with()
-        :headers('drop')
-        :data{
-            hitbox.Position,
-            {linear = Vector3.zero, angular = Vector3.zero}}
-            :invoke()
-
-        services:getService('grab').grabbing = false
-        keybindUi.PickUp.Visible = false
-        keybindUi.Drop.Visible = false
-        keybindUi.Use.Visible = false
         
         --> Scrap it
         local success
@@ -92,6 +78,21 @@ runService.Heartbeat:Connect(function(deltaTime)
                 :catch(function(err)
                     success = false
                 end)
+
+        --> Drop it
+        physItem:drop()
+        gameChannel.physItem:with()
+            :headers('drop')
+            :data{
+                hitbox.Position,
+                {linear = Vector3.zero, angular = Vector3.zero}}
+                :invoke()
+
+        services:getService('grab').grabbing = false
+        keybindUi.PickUp.Visible = false
+        keybindUi.Drop.Visible = false
+        keybindUi.Use.Visible = false
+
         repeat task.wait(0) until success~=nil
         if not success then
             warn(`[{script.Name}] Failed to scrap item! (UUID8: {physItem.__itemUuid:sub(1,8)})`)
